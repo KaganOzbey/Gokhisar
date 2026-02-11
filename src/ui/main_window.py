@@ -265,9 +265,60 @@ class MainWindow(QMainWindow):
     
     @Slot(dict)
     def _on_tcp_response(self, response: dict):
+        """
+        TCP yanıtlarını işle
+        
+        Beklenen yanıt formatı:
+        {
+            "status": "ok",
+            "target_class": "İHA",           # Opsiyonel
+            "is_friendly": false,             # Opsiyonel
+            "target_box": [x, y, w, h]       # Opsiyonel
+        }
+        """
         self.log_panel.log_info(f"TCP Yanıt: {response}")
+        
         if "status" in response:
             self.status_bar.showMessage(f"Raspberry Pi: {response['status']}")
+        
+        # Hedef Sınıflandırma ve IFF Verisi Parse
+        if "target_class" in response and "is_friendly" in response:
+            target_class = response["target_class"]
+            is_friendly = response["is_friendly"]
+            
+            # VideoDisplay'e hedef bilgilerini gönder
+            self.video_display.set_target_info(target_class, is_friendly)
+            
+            # StatusPanel'e güncelleme gönder
+            self.status_panel.set_target_classification(target_class, is_friendly)
+            
+            # ControlPanel'e IFF durumunu gönder (DOST ise ateş kilidi)
+            self.control_panel.set_friendly_target(is_friendly)
+            
+            # Log mesajı
+            iff_status = "DOST" if is_friendly else "DÜŞMAN"
+            self.log_panel.log_warning(f"🎯 Hedef Tespit: {target_class} ({iff_status})")
+            
+            # DOST hedef uyarısı
+            if is_friendly:
+                self.log_panel.log_warning("⚠️ DOST HEDEF - ATEŞ KİLİDİ AKTİF")
+        
+        # Hedef kutusu güncelleme (opsiyonel)
+        if "target_box" in response:
+            box = response["target_box"]
+            if len(box) == 4:
+                self.video_display.set_target_box(*box)
+        
+        # Hedef kaybedildi
+        if response.get("target_lost", False):
+            self._clear_target_data()
+    
+    def _clear_target_data(self):
+        """Hedef verilerini temizle"""
+        self.video_display.clear_target_box()
+        self.status_panel.clear_target_info()
+        self.control_panel.clear_target_lock()
+        self.log_panel.log_info("Hedef kaybedildi")
 
     @Slot(bool)
     def _on_emergency_stop_toggled(self, active: bool):
