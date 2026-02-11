@@ -148,6 +148,7 @@ class ControlPanel(QFrame):
         super().__init__(parent)
         self._fire_unlocked = False  # Güvenlik kilidi
         self._emergency_active = False
+        self._is_friendly_target = None  # IFF durumu (DOST hedeflerde ateş kilidi)
         self._setup_ui()
     
     def _setup_ui(self):
@@ -326,10 +327,18 @@ class ControlPanel(QFrame):
         """
         Ateş butonuna basıldığında
         
-        GÜVENLİK: Sadece kilit açıksa çalışır
+        GÜVENLİK: 
+        - Sadece kilit açıksa çalışır
+        - DOST hedeflere ateş edilmez
         """
         if self._emergency_active:
             return
+        
+        # DOST hedef kontrolü (3. Aşama Şartnamesi)
+        if self._is_friendly_target is True:
+            # DOST hedef - Ateş engellendi
+            return
+        
         if self._fire_unlocked:
             self.fire_command.emit()
             
@@ -347,3 +356,35 @@ class ControlPanel(QFrame):
         btn = mode_map.get(mode.upper())
         if btn:
             btn.setChecked(True)
+    
+    @Slot(bool)
+    def set_friendly_target(self, is_friendly: bool):
+        """
+        Hedef IFF durumunu güncelle ve ateş kontrolü yap
+        
+        Args:
+            is_friendly: True=DOST (Ateş kilidi), False=DÜŞMAN (Ateş serbest)
+        """
+        self._is_friendly_target = is_friendly
+        
+        if is_friendly:
+            # DOST hedef - Ateş butonunu kapat ve görsel uyarı
+            self.btn_fire.setEnabled(False)
+            self.btn_fire.setText("🛡️ DOST HEDEF")
+            self.btn_unlock.setEnabled(False)
+            self.btn_unlock.setChecked(False)
+        else:
+            # DÜŞMAN hedef - Normal ateş kontrolü
+            self.btn_fire.setText("ATEŞ")
+            self.btn_unlock.setEnabled(not self._emergency_active)
+            # Ateş butonu sadece kilit açıksa aktif
+            if self._fire_unlocked and not self._emergency_active:
+                self.btn_fire.setEnabled(True)
+    
+    @Slot()
+    def clear_target_lock(self):
+        """Hedef kilidini temizle"""
+        self._is_friendly_target = None
+        self.btn_fire.setText("ATEŞ")
+        if not self._emergency_active:
+            self.btn_unlock.setEnabled(True)
