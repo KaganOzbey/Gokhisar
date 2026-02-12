@@ -3,6 +3,13 @@ Log Paneli Bileşeni
 
 Sistem mesajlarını, hataları ve olayları gösteren konsol benzeri panel.
 Debug ve operatör bilgilendirmesi için kullanılır.
+
+Görev Odaklı Mesaj Tipleri:
+- HEDEF: Hedef tespit edildi/kaybedildi
+- MENZİL: Menzil içi/dışı durumu
+- DOST: Dost unsur tespiti
+- DÜŞMAN: Düşman unsur tespiti
+- ANGAŽMAN: Angajman durumu
 """
 
 from datetime import datetime
@@ -41,7 +48,7 @@ class LogPanel(QFrame):
         # Başlık ve kontroller
         header_layout = QHBoxLayout()
         
-        title = QLabel("SİSTEM LOG")
+        title = QLabel("GÖREV LOG")
         title.setStyleSheet(Styles.SUBTITLE_LABEL)
         header_layout.addWidget(title)
         
@@ -123,3 +130,116 @@ class LogPanel(QFrame):
         """Log'u temizle"""
         self.log_text.clear()
         self.log_info("Log temizlendi")
+    
+    # ==================== GÖREV ODAKLI MESAJLAR ====================
+    
+    @Slot(str, int)
+    def log_target_detected(self, target_id: str, bearing: int = 0):
+        """
+        Hedef tespit edildi mesajı
+        
+        Args:
+            target_id: Hedef tanımlayıcısı ("T-001", "UAV-12" vb.)
+            bearing: Hedefin yönü (derece)
+        """
+        self._append_log(
+            f"🎯 [HEDEF] Hedef Tespit Edildi: {target_id} | Yön: {bearing}°",
+            "#ff6600"  # Turuncu
+        )
+    
+    @Slot(str)
+    def log_target_lost(self, target_id: str):
+        """Hedef kaybedildi mesajı"""
+        self._append_log(
+            f"❌ [HEDEF] Hedef Kaybedildi: {target_id}",
+            "#ff6600"
+        )
+    
+    @Slot(str, float)
+    def log_in_range(self, target_id: str, distance: float):
+        """
+        Hedef menzil içinde mesajı
+        
+        Args:
+            target_id: Hedef tanımlayıcısı
+            distance: Mesafe (metre)
+        """
+        self._append_log(
+            f"✅ [MENZİL] {target_id} Menzil İçinde | Mesafe: {distance:.0f}m",
+            "#00ff00"  # Yeşil
+        )
+    
+    @Slot(str, float)
+    def log_out_of_range(self, target_id: str, distance: float):
+        """Hedef menzil dışında mesajı"""
+        self._append_log(
+            f"⚠️ [MENZİL] {target_id} Menzil Dışında | Mesafe: {distance:.0f}m",
+            "#ffff00"  # Sarı
+        )
+    
+    @Slot(str, str)
+    def log_friendly(self, target_id: str, unit_type: str = ""):
+        """
+        Dost unsur tespit edildi mesajı
+        
+        Args:
+            target_id: Hedef tanımlayıcısı
+            unit_type: Birim tipi ("F-16", "Bayraktar" vb.)
+        """
+        unit_info = f" ({unit_type})" if unit_type else ""
+        self._append_log(
+            f"🟢 [DOST] Dost Unsur Belirlendi: {target_id}{unit_info}",
+            "#00aaff"  # Mavi
+        )
+    
+    @Slot(str, str)
+    def log_hostile(self, target_id: str, threat_type: str = ""):
+        """
+        Düşman unsur tespit edildi mesajı
+        
+        Args:
+            target_id: Hedef tanımlayıcısı
+            threat_type: Tehdit tipi ("UAV", "Cruise Missile" vb.)
+        """
+        threat_info = f" ({threat_type})" if threat_type else ""
+        self._append_log(
+            f"🔴 [DÜŞMAN] Düşman Unsur Tespit Edildi: {target_id}{threat_info}",
+            "#ff0000"  # Kırmızı
+        )
+    
+    @Slot(str)
+    def log_engagement_start(self, target_id: str):
+        """Angajman başladı mesajı"""
+        self._append_log(
+            f"💥 [ANGAŽMAN] Angajman Başlatıldı: {target_id}",
+            "#ff00ff"  # Magenta
+        )
+    
+    @Slot(str, bool)
+    def log_engagement_result(self, target_id: str, success: bool):
+        """Angajman sonucu mesajı"""
+        if success:
+            self._append_log(
+                f"✅ [ANGAŽMAN] Hedef İmha Edildi: {target_id}",
+                "#00ff00"
+            )
+        else:
+            self._append_log(
+                f"❌ [ANGAŽMAN] Angajman Başarısız: {target_id}",
+                "#ff0000"
+            )
+    
+    @Slot(int, str)
+    def log_track_update(self, track_count: int, status: str = ""):
+        """
+        Radar/track güncellemesi mesajı
+        
+        Args:
+            track_count: Toplam takip edilen hedef sayısı
+            status: Ek durum bilgisi
+        """
+        status_info = f" | {status}" if status else ""
+        self._append_log(
+            f"📡 [RADAR] Aktif Track: {track_count}{status_info}",
+            "#aaaaaa"  # Gri
+        )

@@ -48,15 +48,20 @@ class Config:
     MAX_CLIENTS = 5           # Maksimum eşzamanlı client
     TIMEOUT = 30.0            # Client timeout (saniye)
     
-    # Komut ID'leri
-    CMD_FIRE = 1              # Ateş et komutu
-    CMD_STOP = 2              # Durdur komutu (ileride kullanılabilir)
+    # Komut ID'leri (UI formatıyla uyumlu)
+    CMD_SERVO = 1             # Servo komutu
+    CMD_FIRE = 2              # Ateş et komutu
+    CMD_MODE = 3              # Mod değişikliği
     
     # Yanıt kodları
     # 1-byte status kodları (0-255)
     STATUS_SUCCESS = 0        # Başarılı
     STATUS_INVALID_CMD = 1    # Geçersiz komut
     STATUS_ERROR = 2          # İşlem hatası
+
+    # UI Paket formatı: <BhhBH (8 byte)
+    # cmd_id(1) + x(2) + y(2) + flags(1) + checksum(2)
+    PACKET_SIZE = 8
 
 # ============================================================================
 # LOGLAMA
@@ -92,16 +97,16 @@ class CommandHistory:
         self.max_size = max_size
         self.lock = Lock()
         
-    def add(self, client_addr, cmd_id, azimuth, elevation, distance, success):
+    def add(self, client_addr, cmd_id, x, y, flags, success):
         """Komut ekle"""
         with self.lock:
             command = {
                 'timestamp': datetime.now(),
                 'client': f"{client_addr[0]}:{client_addr[1]}",
                 'cmd_id': cmd_id,
-                'azimuth': azimuth,
-                'elevation': elevation,
-                'distance': distance,
+                'x': x,
+                'y': y,
+                'flags': flags,
                 'success': success
             }
             
@@ -146,9 +151,7 @@ class CommandHistory:
                         f"{status} {cmd['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} | "
                         f"{cmd['client']} | "
                         f"CMD:{cmd['cmd_id']} | "
-                        f"Az:{cmd['azimuth']:.2f}° "
-                        f"El:{cmd['elevation']:.2f}° "
-                        f"Dist:{cmd['distance']:.1f}m\n"
+                        f"X:{cmd['x']}° Y:{cmd['y']}° Flags:{cmd['flags']}\n"
                     )
             
             return filename
@@ -163,43 +166,51 @@ class CommandProcessor:
     def __init__(self, logger):
         self.logger = logger
     
-    def validate_fire_command(self, azimuth, elevation, distance):
-        """Ateş komutu parametrelerini doğrula"""
+    def validate_servo_command(self, x: int, y: int):
+        """Servo komutu parametrelerini doğrula"""
         errors = []
         
-        # Azimuth kontrolü (0-360°)
-        if not (0.0 <= azimuth <= 360.0):
-            errors.append(f"Geçersiz azimuth: {azimuth}° (0-360° olmalı)")
+        # X kontrolü (-180 ile 180)
+        if not (-180 <= x <= 180):
+            errors.append(f"Geçersiz X: {x}° (-180 ile 180 olmalı)")
         
-        # Elevation kontrolü (-15 - 85°)
-        if not (-15.0 <= elevation <= 85.0):
-            errors.append(f"Geçersiz elevation: {elevation}° (-15 - 85° olmalı)")
-        
-        # Distance kontrolü (100-5000m)
-        if not (100.0 <= distance <= 5000.0):
-            errors.append(f"Geçersiz distance: {distance}m (100-5000m olmalı)")
+        # Y kontrolü (-90 ile 90)
+        if not (-90 <= y <= 90):
+            errors.append(f"Geçersiz Y: {y}° (-90 ile 90 olmalı)")
         
         return len(errors) == 0, errors
     
-    def process_fire_command(self, azimuth, elevation, distance):
-        """Ateş komutunu işle"""
-        # Validasyon
-        valid, errors = self.validate_fire_command(azimuth, elevation, distance)
+    def process_servo_command(self, x: int, y: int):
+        """Servo komutunu işle"""
+        valid, errors = self.validate_servo_command(x, y)
         
         if not valid:
             for error in errors:
                 self.logger.warning(error)
             return False
         
-        # Burada gerçek sistemde ateş etme işlemi olurdu
-        # Şimdilik sadece log
         self.logger.info(
-            f"[FIRE] ATEŞ KOMUTU İŞLENDİ | "
-            f"Az: {azimuth:.2f}° | "
-            f"El: {elevation:.2f}° | "
-            f"Dist: {distance:.1f}m"
+            f"[SERVO] SERVO KOMUTU İŞLENDİ | "
+            f"X: {x}° | Y: {y}°"
         )
-        
+        return True
+    
+    def process_fire_command(self, flags: int):
+        """Ateş komutunu işle"""
+        self.logger.info(
+            f"[FIRE] 🔥 ATEŞ KOMUTU İŞLENDİ | "
+            f"Flags: {flags}"
+        )
+        return True
+    
+    def process_mode_command(self, mode_id: int):
+        """Mod değişikliği komutunu işle"""
+        mode_names = {0: "MANUEL", 1: "YARI_OTONOM", 2: "TAM_OTONOM"}
+        mode_name = mode_names.get(mode_id, f"UNKNOWN({mode_id})")
+        self.logger.info(
+            f"[MODE] MOD DEĞİŞTİRİLDİ | "
+            f"Mod: {mode_name}"
+        )
         return True
 
 # ============================================================================
@@ -215,6 +226,16 @@ def recv_exact(sock: socket.socket, size: int) -> bytes:
             break
         buf.extend(chunk)
     return bytes(buf)
+
+def verify_checksum(packet: bytes) -> bool:
+    """UI'nin gönderdiği checksum'ı doğrula"""
+    if len(packet) != 8:
+        return False
+    # İlk 6 byte'ın toplamı mod 65536 = son 2 byte (little-endian uint16)
+    data_part = packet[:6]
+    received_checksum = struct.unpack('<H', packet[6:8])[0]
+    calculated_checksum = sum(data_part) % 65536
+    return received_checksum == calculated_checksum
 
 class FireCommandServer:
     """TCP Fire Command Server"""
@@ -245,8 +266,8 @@ class FireCommandServer:
             self.logger.info(f"Adres         : {self.config.TCP_IP}:{self.config.TCP_PORT}")
             self.logger.info(f"Max Client    : {self.config.MAX_CLIENTS}")
             self.logger.info(f"Timeout       : {self.config.TIMEOUT} saniye")
-            self.logger.info(f"Protokol      : Binary (struct)")
-            self.logger.info(f"Paket Boyutu  : 13 byte (1B cmd + 3x4B float)")
+            self.logger.info(f"Protokol      : Binary (UI uyumlu)")
+            self.logger.info(f"Paket Boyutu  : 8 byte (<BhhBH)")
             self.logger.info("Ctrl+C ile durdurun")
             self.logger.info("=" * 70)
             
@@ -267,39 +288,50 @@ class FireCommandServer:
             client_socket.settimeout(self.config.TIMEOUT)
             
             while self.running:
-                # Tam 13 byte oku (TCP framing)
-                data = recv_exact(client_socket, 13)
-                if len(data) != 13:
+                # UI formatı: 8 byte (<BhhBH)
+                data = recv_exact(client_socket, self.config.PACKET_SIZE)
+                if len(data) != self.config.PACKET_SIZE:
                     break
 
                 try:
-                    cmd_id, az, el, dist = struct.unpack('=Bfff', data)
+                    # Checksum doğrula
+                    if not verify_checksum(data):
+                        self.logger.warning(f"[CLIENT #{client_id}] Checksum hatası!")
+                        response = struct.pack('=B', self.config.STATUS_ERROR)
+                        client_socket.send(response)
+                        continue
+                    
+                    # UI formatı: cmd_id(1) + x(2) + y(2) + flags(1) + checksum(2)
+                    cmd_id, x, y, flags = struct.unpack('<BhhB', data[:6])
                         
                     self.logger.info(
                         f"[CLIENT #{client_id}] "
-                        f"CMD:{cmd_id} | Az:{az:.2f}° El:{el:.2f}° Dist:{dist:.1f}m"
+                        f"CMD:{cmd_id} | X:{x}° Y:{y}° Flags:{flags}"
                     )
                     
                     # Komutu işle
-                    if cmd_id == self.config.CMD_FIRE:
-                        success = self.processor.process_fire_command(az, el, dist)
-                        
-                        # Geçmişe ekle
-                        self.history.add(client_addr, cmd_id, az, el, dist, success)
-                        
-                        # ACK/NACK gönder
-                        if success:
-                            response = struct.pack('=B', self.config.STATUS_SUCCESS)
-                        else:
-                            response = struct.pack('=B', self.config.STATUS_ERROR)
-                        
-                        client_socket.send(response)
-                        
+                    success = False
+                    if cmd_id == self.config.CMD_SERVO:
+                        success = self.processor.process_servo_command(x, y)
+                        self.history.add(client_addr, cmd_id, x, y, 0, success)
+                    elif cmd_id == self.config.CMD_FIRE:
+                        success = self.processor.process_fire_command(flags)
+                        self.history.add(client_addr, cmd_id, x, y, 0, success)
+                    elif cmd_id == self.config.CMD_MODE:
+                        success = self.processor.process_mode_command(x)
+                        self.history.add(client_addr, cmd_id, x, y, 0, success)
                     else:
-                        # Bilinmeyen komut
                         self.logger.warning(f"[CLIENT #{client_id}] Bilinmeyen komut: {cmd_id}")
                         response = struct.pack('=B', self.config.STATUS_INVALID_CMD)
                         client_socket.send(response)
+                        continue
+                    
+                    # ACK/NACK gönder
+                    if success:
+                        response = struct.pack('=B', self.config.STATUS_SUCCESS)
+                    else:
+                        response = struct.pack('=B', self.config.STATUS_ERROR)
+                    client_socket.send(response)
                         
                 except struct.error as e:
                     self.logger.error(f"[CLIENT #{client_id}] Parse hatası: {e}")
