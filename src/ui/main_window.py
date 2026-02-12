@@ -250,6 +250,9 @@ class MainWindow(QMainWindow):
         self._target_simulator.track_update.connect(self.log_panel.log_track_update)
         self._target_simulator.status_changed.connect(self.log_panel.log_status)
         
+        # Menzil göstergesi bağlantısı
+        self._target_simulator.distance_updated.connect(self.status_panel.set_target_distance)
+        
         self._target_simulator.start_worker()
         self.log_panel.log_info("🎯 Hedef simülasyonu başlatıldı")
         self.status_bar.showMessage("Hedef simülasyonu aktif")
@@ -260,6 +263,7 @@ class MainWindow(QMainWindow):
             self._target_simulator.stop_worker()
             self._target_simulator = None
             self.log_panel.log_info("Hedef simülasyonu durduruldu")
+            self.status_panel.clear_target_distance()
     
     def toggle_target_simulator(self):
         """Hedef simülasyonunu aç/kapat"""

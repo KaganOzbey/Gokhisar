@@ -134,6 +134,62 @@ class StatusPanel(QFrame):
         target_layout.addWidget(self.target_type_label)
         layout.addWidget(target_group)
         
+        # Menzil durumu
+        range_group = QGroupBox("Menzil Durumu")
+        range_group.setStyleSheet(Styles.GROUP_BOX)
+        range_layout = QVBoxLayout(range_group)
+        range_layout.setContentsMargins(8, 6, 8, 8)
+        range_layout.setSpacing(6)
+        
+        # Mesafe göstergesi
+        self.distance_label = QLabel("Mesafe: - km")
+        self.distance_label.setStyleSheet("""
+            QLabel {
+                color: #00ff00;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 8px;
+                background-color: #1a1a2e;
+                border: 1px solid #333;
+                border-radius: 4px;
+            }
+        """)
+        self.distance_label.setAlignment(Qt.AlignCenter)
+        range_layout.addWidget(self.distance_label)
+        
+        # Menzil bantları (5m, 10m, 15m)
+        bands_layout = QHBoxLayout()
+        bands_layout.setSpacing(4)
+        
+        self.range_5m = QLabel("5m")
+        self.range_10m = QLabel("10m")
+        self.range_15m = QLabel("15m")
+        
+        for label in [self.range_5m, self.range_10m, self.range_15m]:
+            label.setAlignment(Qt.AlignCenter)
+            label.setFixedHeight(28)
+            label.setStyleSheet("""
+                QLabel {
+                    color: #888;
+                    background-color: #2a2a3e;
+                    border: 1px solid #444;
+                    border-radius: 3px;
+                    font-size: 11px;
+                    padding: 2px 8px;
+                }
+            """)
+            bands_layout.addWidget(label)
+        
+        range_layout.addLayout(bands_layout)
+        
+        # Menzil durumu etiketi
+        self.range_status_label = QLabel("Bekleniyor...")
+        self.range_status_label.setStyleSheet(Styles.SUBTITLE_LABEL)
+        self.range_status_label.setAlignment(Qt.AlignCenter)
+        range_layout.addWidget(self.range_status_label)
+        
+        layout.addWidget(range_group)
+        
         # Kritik bölge uyarısı
         self.critical_warning = QLabel("⚠ KRİTİK BÖLGE")
         self.critical_warning.setStyleSheet(Styles.STATUS_LABEL_WARNING)
@@ -176,3 +232,106 @@ class StatusPanel(QFrame):
     def set_critical_zone_warning(self, is_critical: bool):
         """Kritik bölge uyarısını göster/gizle"""
         self.critical_warning.setVisible(is_critical)
+    
+    @Slot(float)
+    def set_target_distance(self, distance_m: float):
+        """
+        Hedef mesafesini güncelle
+        
+        Args:
+            distance_m: Mesafe (metre cinsinden)
+        """
+        distance_m = distance_m  # Zaten metre cinsinden
+        self.distance_label.setText(f"Mesafe: {distance_m:.1f} m")
+        
+        # Menzil bantlarını güncelle
+        self._update_range_bands(distance_m)
+        
+        # Menzil durumunu güncelle
+        if distance_m <= 5:
+            self.range_status_label.setText("✅ YAKIN MENZİL - Angajman Öncelikli")
+            self.range_status_label.setStyleSheet("color: #00ff00; font-weight: bold;")
+            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#00ff00", "#ff0000"))
+        elif distance_m <= 10:
+            self.range_status_label.setText("⚠️ ORTA MENZİL - Takipte")
+            self.range_status_label.setStyleSheet("color: #ffaa00; font-weight: bold;")
+            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ff0000", "#ffaa00").replace("#00ff00", "#ffaa00"))
+        elif distance_m <= 15:
+            self.range_status_label.setText("🟡 UZAK MENZİL - İzleniyor")
+            self.range_status_label.setStyleSheet("color: #ffff00;")
+            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ffaa00", "#ffff00").replace("#ff0000", "#ffff00"))
+        else:
+            self.range_status_label.setText("⚪ MENZİL DIŞI")
+            self.range_status_label.setStyleSheet("color: #888;")
+            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ffff00", "#888").replace("#ffaa00", "#888").replace("#ff0000", "#888"))
+    
+    def _update_range_bands(self, distance_m: float):
+        """Menzil bantlarını görsel olarak güncelle"""
+        # Aktif bantı vurgula
+        active_style = """
+            QLabel {
+                color: #fff;
+                background-color: #ff4444;
+                border: 2px solid #ff0000;
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: bold;
+                padding: 2px 8px;
+            }
+        """
+        inactive_style = """
+            QLabel {
+                color: #888;
+                background-color: #2a2a3e;
+                border: 1px solid #444;
+                border-radius: 3px;
+                font-size: 11px;
+                padding: 2px 8px;
+            }
+        """
+        
+        # Tüm bantları sıfırla
+        self.range_5m.setStyleSheet(inactive_style)
+        self.range_10m.setStyleSheet(inactive_style)
+        self.range_15m.setStyleSheet(inactive_style)
+        
+        # Aktif bantı vurgula
+        if distance_m <= 5:
+            self.range_5m.setStyleSheet(active_style)
+        elif distance_m <= 10:
+            self.range_10m.setStyleSheet(active_style.replace("#ff4444", "#ff8800").replace("#ff0000", "#ff6600"))
+        elif distance_m <= 15:
+            self.range_15m.setStyleSheet(active_style.replace("#ff4444", "#ffcc00").replace("#ff0000", "#ffaa00"))
+    
+    @Slot()
+    def clear_target_distance(self):
+        """Hedef mesafesini temizle"""
+        self.distance_label.setText("Mesafe: - m")
+        self.distance_label.setStyleSheet("""
+            QLabel {
+                color: #00ff00;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 8px;
+                background-color: #1a1a2e;
+                border: 1px solid #333;
+                border-radius: 4px;
+            }
+        """)
+        self.range_status_label.setText("Bekleniyor...")
+        self.range_status_label.setStyleSheet(Styles.SUBTITLE_LABEL)
+        
+        # Bantları sıfırla
+        inactive_style = """
+            QLabel {
+                color: #888;
+                background-color: #2a2a3e;
+                border: 1px solid #444;
+                border-radius: 3px;
+                font-size: 11px;
+                padding: 2px 8px;
+            }
+        """
+        self.range_5m.setStyleSheet(inactive_style)
+        self.range_10m.setStyleSheet(inactive_style)
+        self.range_15m.setStyleSheet(inactive_style)

@@ -17,20 +17,51 @@ from PySide6.QtCore import Signal, QTimer
 from src.workers.base_worker import BaseWorker
 
 
+# Menzil bantları (metre)
+RANGE_CLOSE = 5       # 5m - Yakın menzil (angajman öncelikli)
+RANGE_MEDIUM = 10     # 10m - Orta menzil (takipte)
+RANGE_FAR = 15        # 15m - Uzak menzil (izleniyor)
+RANGE_MAX = 20        # 20m - Maksimum algılama
+
+
 class Target:
     """Simüle edilmiş hedef"""
     
-    def __init__(self, target_id: str, is_hostile: bool = True):
+    def __init__(self, target_id: str, is_hostile: bool = True, distance: int = None):
         self.id = target_id
         self.is_hostile = is_hostile
         self.bearing = random.randint(0, 359)
-        self.distance = random.randint(500, 8000)  # metre
+        # 5m, 10m, 15m bantlarından birinde başlat
+        if distance is None:
+            self.distance = random.choice([
+                random.randint(3, 5),      # Yakın menzil (3-5m)
+                random.randint(7, 10),     # Orta menzil (7-10m)
+                random.randint(12, 15),    # Uzak menzil (12-15m)
+            ])
+        else:
+            self.distance = distance
         self.altitude = random.randint(100, 5000)  # metre
         self.speed = random.randint(50, 500)  # km/h
         self.threat_type = random.choice(["UAV", "Cruise Missile", "Aircraft", "Drone", "Helicopter"])
         self.friendly_type = random.choice(["F-16", "Bayraktar TB2", "ATAK", "Kaan", "Hürkuş"])
-        self.in_range = self.distance <= 4000  # 4km menzil
         self.tracked = True
+    
+    @property
+    def range_band(self) -> str:
+        """Hangi menzil bandında olduğunu döndür"""
+        if self.distance <= RANGE_CLOSE:
+            return "YAKIN"
+        elif self.distance <= RANGE_MEDIUM:
+            return "ORTA"
+        elif self.distance <= RANGE_FAR:
+            return "UZAK"
+        else:
+            return "DIŞI"
+    
+    @property
+    def in_engagement_range(self) -> bool:
+        """Angajman menzilinde mi?"""
+        return self.distance <= RANGE_CLOSE
 
 
 class TargetSimulator(BaseWorker):
@@ -60,6 +91,10 @@ class TargetSimulator(BaseWorker):
     engagement_result = Signal(str, bool)   # target_id, success
     track_update = Signal(int, str)         # count, status
     
+    # Menzil güncellemesi (UI status panel için)
+    distance_updated = Signal(float)        # en yakın hedefin mesafesi (metre)
+    closest_target_changed = Signal(str, float)  # target_id, distance
+    
     def __init__(self, parent=None):
         super().__init__(parent)
         self._targets: Dict[str, Target] = {}
@@ -71,7 +106,7 @@ class TargetSimulator(BaseWorker):
         """Simülasyon döngüsü"""
         self.emit_status("Hedef simülasyonu başlatıldı")
         
-        # İlk hedefleri oluştur
+        # İlk hedefleri oluştur (5m, 10m, 15m'de birer tane)
         self._generate_initial_targets()
         
         while self.is_running:
@@ -86,16 +121,32 @@ class TargetSimulator(BaseWorker):
                 f"Düşman: {hostile_count} | Dost: {friendly_count}"
             )
             
+            # En yakın hedefin mesafesini gönder
+            self._emit_closest_target_distance()
+            
             # Bekleme
             self.msleep(self._event_interval)
     
-    def _generate_initial_targets(self):
-        """Başlangıç hedeflerini oluştur"""
-        # 2-3 başlangıç hedefi
-        for _ in range(random.randint(2, 3)):
-            self._create_new_target()
+    def _emit_closest_target_distance(self):
+        """En yakın düşman hedefin mesafesini gönder"""
+        hostile_targets = [t for t in self._targets.values() if t.is_hostile]
+        if hostile_targets:
+            closest = min(hostile_targets, key=lambda t: t.distance)
+            self.distance_updated.emit(float(closest.distance))
+            self.closest_target_changed.emit(closest.id, float(closest.distance))
     
-    def _create_new_target(self, is_hostile: bool = None) -> Target:
+    def _generate_initial_targets(self):
+        """Başlangıç hedeflerini oluştur - her menzil bandında birer tane"""
+        # 5m menzilinde düşman
+        self._create_new_target(is_hostile=True, distance=4)
+        
+        # 10m menzilinde düşman
+        self._create_new_target(is_hostile=True, distance=9)
+        
+        # 15m menzilinde dost
+        self._create_new_target(is_hostile=False, distance=14)
+    
+    def _create_new_target(self, is_hostile: bool = None, distance: int = None) -> Target:
         """Yeni hedef oluştur"""
         self._target_counter += 1
         
@@ -105,7 +156,7 @@ class TargetSimulator(BaseWorker):
         prefix = "T" if is_hostile else "F"
         target_id = f"{prefix}-{self._target_counter:03d}"
         
-        target = Target(target_id, is_hostile)
+        target = Target(target_id, is_hostile, distance)
         self._targets[target_id] = target
         
         # Tespit mesajı
@@ -117,10 +168,10 @@ class TargetSimulator(BaseWorker):
         else:
             self.friendly_detected.emit(target_id, target.friendly_type)
         
-        # Menzil durumu
-        if target.in_range:
+        # Menzil durumu (5m, 10m, 15m bantlarına göre)
+        if target.distance <= RANGE_CLOSE:
             self.in_range.emit(target_id, float(target.distance))
-        else:
+        elif target.distance <= RANGE_FAR:
             self.out_of_range.emit(target_id, float(target.distance))
         
         return target
@@ -149,19 +200,26 @@ class TargetSimulator(BaseWorker):
             target_id = random.choice(list(self._targets.keys()))
             target = self._targets[target_id]
             
-            # Mesafeyi değiştir
-            target.distance += random.randint(-1000, 1000)
-            target.distance = max(500, min(8000, target.distance))
-            target.in_range = target.distance <= 4000
+            old_band = target.range_band
             
-            if target.in_range:
-                self.in_range.emit(target_id, float(target.distance))
-            else:
-                self.out_of_range.emit(target_id, float(target.distance))
+            # Mesafeyi değiştir (yaklaş veya uzaklaş)
+            direction = random.choice([-1, 1])  # -1: yaklaş, 1: uzaklaş
+            change = random.randint(1, 3) * direction
+            target.distance += change
+            target.distance = max(1, min(RANGE_MAX, target.distance))
+            
+            new_band = target.range_band
+            
+            # Menzil bandı değiştiyse bildir
+            if old_band != new_band:
+                if target.distance <= RANGE_CLOSE:
+                    self.in_range.emit(target_id, float(target.distance))
+                else:
+                    self.out_of_range.emit(target_id, float(target.distance))
                 
         elif event_type == "engagement" and self._targets:
-            # Düşman hedeflerden birine angajman
-            hostile_targets = [t for t in self._targets.values() if t.is_hostile and t.in_range]
+            # Düşman hedeflerden birine angajman (sadece 5km içindekiler)
+            hostile_targets = [t for t in self._targets.values() if t.is_hostile and t.in_engagement_range]
             
             if hostile_targets:
                 target = random.choice(hostile_targets)
