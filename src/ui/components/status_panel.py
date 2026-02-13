@@ -129,9 +129,28 @@ class StatusPanel(QFrame):
         self.target_label.setFixedHeight(30)
         target_layout.addWidget(self.target_label)
         
+        # Hedef sınıfı ve ikon (yatay layout)
+        class_layout = QHBoxLayout()
+        class_layout.setSpacing(6)
+        
+        self.target_icon = QLabel("●")  # Varsayılan ikon
+        self.target_icon.setStyleSheet("color: #4f83ff; font-size: 18px;")
+        self.target_icon.setFixedWidth(24)
+        class_layout.addWidget(self.target_icon)
+        
         self.target_type_label = QLabel("Tür: -")
-        self.target_type_label.setStyleSheet(Styles.SUBTITLE_LABEL)
-        target_layout.addWidget(self.target_type_label)
+        self.target_type_label.setStyleSheet(Styles.TARGET_CLASS_LABEL)
+        class_layout.addWidget(self.target_type_label, stretch=1)
+        
+        target_layout.addLayout(class_layout)
+        
+        # IFF (Dost/Düşman) Badge
+        self.iff_badge = QLabel("BİLİNMİYOR")
+        self.iff_badge.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
+        self.iff_badge.setAlignment(Qt.AlignCenter)
+        self.iff_badge.setFixedHeight(32)
+        target_layout.addWidget(self.iff_badge)
+        
         layout.addWidget(target_group)
         
         # Menzil durumu
@@ -220,6 +239,18 @@ class StatusPanel(QFrame):
         self.target_label.setText(status)
         self.target_type_label.setText(f"Tür: {target_type}" if target_type else "Tür: -")
         
+        # Hedef tipine göre ikon seçimi
+        icon_map = {
+            "Balistik Füze": "↑",
+            "İHA": "✈",
+            "Helikopter": "🚁",
+            "Savaş Uçağı": "✈",
+            "Mini/Micro İHA": "⚡",
+        }
+        
+        icon = icon_map.get(target_type, "●")
+        self.target_icon.setText(icon)
+        
         # Düşman hedefinde kırmızı, dost hedefinde yeşil
         if "DÜŞMAN" in target_type.upper():
             self.target_label.setStyleSheet(Styles.STATUS_LABEL_WARNING)
@@ -227,6 +258,52 @@ class StatusPanel(QFrame):
             self.target_label.setStyleSheet(Styles.STATUS_LABEL_OK)
         else:
             self.target_label.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
+    
+    @Slot(str, bool)
+    def set_target_classification(self, target_class: str, is_friendly: bool):
+        """
+        Hedef sınıflandırma ve IFF bilgisini güncelle
+        
+        Args:
+            target_class: "Balistik Füze", "İHA", "Helikopter", vb.
+            is_friendly: True=DOST, False=DÜŞMAN
+        """
+        # Hedef durumu güncelle
+        self.target_label.setText("HEDEF TESPİT")
+        
+        # Sınıf bilgisi
+        self.target_type_label.setText(f"Tür: {target_class}")
+        
+        # İkon seçimi
+        icon_map = {
+            "Balistik Füze": "↑",
+            "İHA": "✈",
+            "Helikopter": "🚁",
+            "Savaş Uçağı": "✈",
+            "Mini/Micro İHA": "⚡",
+        }
+        icon = icon_map.get(target_class, "●")
+        self.target_icon.setText(icon)
+        
+        # IFF Badge güncelleme
+        if is_friendly:
+            self.iff_badge.setText("✓ DOST")
+            self.iff_badge.setStyleSheet(Styles.IFF_BADGE_FRIENDLY)
+            self.target_label.setStyleSheet(Styles.STATUS_LABEL_OK)
+        else:
+            self.iff_badge.setText("✕ DÜŞMAN")
+            self.iff_badge.setStyleSheet(Styles.IFF_BADGE_HOSTILE)
+            self.target_label.setStyleSheet(Styles.STATUS_LABEL_WARNING)
+    
+    @Slot()
+    def clear_target_info(self):
+        """Hedef bilgilerini temizle"""
+        self.target_label.setText("HEDEF YOK")
+        self.target_label.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
+        self.target_type_label.setText("Tür: -")
+        self.target_icon.setText("●")
+        self.iff_badge.setText("BİLİNMİYOR")
+        self.iff_badge.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
     
     @Slot(bool)
     def set_critical_zone_warning(self, is_critical: bool):
