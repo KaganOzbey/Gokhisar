@@ -142,7 +142,6 @@ class ControlPanel(QFrame):
     mode_changed = Signal(str)
     fire_command = Signal()
     servo_command = Signal(int, int)
-    emergency_stop_toggled = Signal(bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -228,13 +227,6 @@ class ControlPanel(QFrame):
         fire_layout.setContentsMargins(6, 4, 6, 6)
         fire_layout.setSpacing(4)
 
-        # Acil durdur
-        self.btn_emergency = QPushButton("ACİL DURDUR")
-        self.btn_emergency.setStyleSheet(Styles.BUTTON_DANGER)
-        self.btn_emergency.setCheckable(True)
-        self.btn_emergency.setFixedHeight(40)
-        fire_layout.addWidget(self.btn_emergency)
-        
         # Güvenlik kilidi
         self.btn_unlock = QPushButton("KİLİDİ AÇ")
         self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL)
@@ -256,35 +248,10 @@ class ControlPanel(QFrame):
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
         self.servo_control.servo_changed.connect(self._on_servo_changed)
         self.btn_reset.clicked.connect(self._on_reset_clicked)
-        self.btn_emergency.toggled.connect(self._on_emergency_toggled)
         self.btn_unlock.toggled.connect(self._on_unlock_toggled)
         self.btn_fire.clicked.connect(self._on_fire_clicked)
 
-    def _on_emergency_toggled(self, checked: bool):
-        self._emergency_active = checked
-
-        # UI kilitle
-        if checked:
-            self.btn_emergency.setText("ACİL DURDUR AKTİF")
-            # Ateş ve kilidi kapat
-            self.btn_unlock.setChecked(False)
-            self.btn_unlock.setEnabled(False)
-            self.btn_fire.setEnabled(False)
-            # Servo kontrolü kapat
-            self.servo_control.setEnabled(False)
-            self.btn_reset.setEnabled(False)
-        else:
-            self.btn_emergency.setText("ACİL DURDUR")
-            self.btn_unlock.setEnabled(True)
-            self.btn_reset.setEnabled(True)
-            # Mod manuel ise servo kontrolü aktif edilebilir
-            self.servo_control.setEnabled(True)
-
-        self.emergency_stop_toggled.emit(checked)
-    
     def _on_mode_changed(self, button):
-        if self._emergency_active:
-            return
         mode_id = self.mode_group.id(button)
         mode_map = {
             0: "MANUEL",
@@ -300,8 +267,6 @@ class ControlPanel(QFrame):
     
     def _on_servo_changed(self, x: int, y: int):
         """Servo değerleri değiştiğinde"""
-        if self._emergency_active:
-            return
         self.servo_command.emit(x, y)
     
     def _on_reset_clicked(self):
@@ -310,9 +275,6 @@ class ControlPanel(QFrame):
     
     def _on_unlock_toggled(self, checked: bool):
         """Güvenlik kilidi değiştiğinde"""
-        if self._emergency_active:
-            self.btn_unlock.setChecked(False)
-            return
         self._fire_unlocked = checked
         self.btn_fire.setEnabled(checked)
         
