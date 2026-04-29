@@ -76,11 +76,11 @@ class NetworkConfig:
     """
     
     # Raspberry Pi bağlantı ayarları
-    RPI_HOST = "192.168.1.100"
+    RPI_HOST = os.environ.get("GOKHISAR_RPI_HOST", "192.168.1.100")
     
     # Port numaraları
-    UDP_VIDEO_PORT = 5000      # GStreamer video akışı
-    TCP_COMMAND_PORT = 5001    # Kontrol komutları
+    UDP_VIDEO_PORT = int(os.environ.get("GOKHISAR_UDP_VIDEO_PORT", "5000"))      # GStreamer video akışı
+    TCP_COMMAND_PORT = int(os.environ.get("GOKHISAR_TCP_COMMAND_PORT", "5001"))    # Kontrol komutları
     
     # Timeout ayarları (saniye)
     TCP_TIMEOUT = 5.0

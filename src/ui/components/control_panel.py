@@ -142,12 +142,12 @@ class ControlPanel(QFrame):
     mode_changed = Signal(str)
     fire_command = Signal()
     servo_command = Signal(int, int)
-    emergency_stop_toggled = Signal(bool)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self._fire_unlocked = False  # Güvenlik kilidi
         self._emergency_active = False
+        self._is_friendly_target = None  # IFF durumu (DOST hedeflerde ateş kilidi)
         self._setup_ui()
     
     def _setup_ui(self):
@@ -227,13 +227,6 @@ class ControlPanel(QFrame):
         fire_layout.setContentsMargins(6, 4, 6, 6)
         fire_layout.setSpacing(4)
 
-        # Acil durdur
-        self.btn_emergency = QPushButton("ACİL DURDUR")
-        self.btn_emergency.setStyleSheet(Styles.BUTTON_DANGER)
-        self.btn_emergency.setCheckable(True)
-        self.btn_emergency.setFixedHeight(40)
-        fire_layout.addWidget(self.btn_emergency)
-        
         # Güvenlik kilidi
         self.btn_unlock = QPushButton("KİLİDİ AÇ")
         self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL)
@@ -255,35 +248,10 @@ class ControlPanel(QFrame):
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
         self.servo_control.servo_changed.connect(self._on_servo_changed)
         self.btn_reset.clicked.connect(self._on_reset_clicked)
-        self.btn_emergency.toggled.connect(self._on_emergency_toggled)
         self.btn_unlock.toggled.connect(self._on_unlock_toggled)
         self.btn_fire.clicked.connect(self._on_fire_clicked)
 
-    def _on_emergency_toggled(self, checked: bool):
-        self._emergency_active = checked
-
-        # UI kilitle
-        if checked:
-            self.btn_emergency.setText("ACİL DURDUR AKTİF")
-            # Ateş ve kilidi kapat
-            self.btn_unlock.setChecked(False)
-            self.btn_unlock.setEnabled(False)
-            self.btn_fire.setEnabled(False)
-            # Servo kontrolü kapat
-            self.servo_control.setEnabled(False)
-            self.btn_reset.setEnabled(False)
-        else:
-            self.btn_emergency.setText("ACİL DURDUR")
-            self.btn_unlock.setEnabled(True)
-            self.btn_reset.setEnabled(True)
-            # Mod manuel ise servo kontrolü aktif edilebilir
-            self.servo_control.setEnabled(True)
-
-        self.emergency_stop_toggled.emit(checked)
-    
     def _on_mode_changed(self, button):
-        if self._emergency_active:
-            return
         mode_id = self.mode_group.id(button)
         mode_map = {
             0: "MANUEL",
@@ -299,8 +267,6 @@ class ControlPanel(QFrame):
     
     def _on_servo_changed(self, x: int, y: int):
         """Servo değerleri değiştiğinde"""
-        if self._emergency_active:
-            return
         self.servo_command.emit(x, y)
     
     def _on_reset_clicked(self):
@@ -309,9 +275,6 @@ class ControlPanel(QFrame):
     
     def _on_unlock_toggled(self, checked: bool):
         """Güvenlik kilidi değiştiğinde"""
-        if self._emergency_active:
-            self.btn_unlock.setChecked(False)
-            return
         self._fire_unlocked = checked
         self.btn_fire.setEnabled(checked)
         
@@ -326,10 +289,18 @@ class ControlPanel(QFrame):
         """
         Ateş butonuna basıldığında
         
-        GÜVENLİK: Sadece kilit açıksa çalışır
+        GÜVENLİK: 
+        - Sadece kilit açıksa çalışır
+        - DOST hedeflere ateş edilmez
         """
         if self._emergency_active:
             return
+        
+        # DOST hedef kontrolü (3. Aşama Şartnamesi)
+        if self._is_friendly_target is True:
+            # DOST hedef - Ateş engellendi
+            return
+        
         if self._fire_unlocked:
             self.fire_command.emit()
             
@@ -347,3 +318,35 @@ class ControlPanel(QFrame):
         btn = mode_map.get(mode.upper())
         if btn:
             btn.setChecked(True)
+    
+    @Slot(bool)
+    def set_friendly_target(self, is_friendly: bool):
+        """
+        Hedef IFF durumunu güncelle ve ateş kontrolü yap
+        
+        Args:
+            is_friendly: True=DOST (Ateş kilidi), False=DÜŞMAN (Ateş serbest)
+        """
+        self._is_friendly_target = is_friendly
+        
+        if is_friendly:
+            # DOST hedef - Ateş butonunu kapat ve görsel uyarı
+            self.btn_fire.setEnabled(False)
+            self.btn_fire.setText("🛡️ DOST HEDEF")
+            self.btn_unlock.setEnabled(False)
+            self.btn_unlock.setChecked(False)
+        else:
+            # DÜŞMAN hedef - Normal ateş kontrolü
+            self.btn_fire.setText("ATEŞ")
+            self.btn_unlock.setEnabled(not self._emergency_active)
+            # Ateş butonu sadece kilit açıksa aktif
+            if self._fire_unlocked and not self._emergency_active:
+                self.btn_fire.setEnabled(True)
+    
+    @Slot()
+    def clear_target_lock(self):
+        """Hedef kilidini temizle"""
+        self._is_friendly_target = None
+        self.btn_fire.setText("ATEŞ")
+        if not self._emergency_active:
+            self.btn_unlock.setEnabled(True)

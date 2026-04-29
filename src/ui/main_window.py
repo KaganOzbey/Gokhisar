@@ -35,6 +35,7 @@ from src.ui.components.log_panel import LogPanel
 from src.workers.network_worker import UDPVideoWorker, TCPCommandWorker
 from src.workers.gstreamer_video_worker import GStreamerVideoWorker
 from src.workers.detection_worker import DetectionWorker
+from src.workers.target_simulator import TargetSimulator
 
 
 class MainWindow(QMainWindow):
@@ -57,11 +58,10 @@ class MainWindow(QMainWindow):
         self._udp_worker: Optional[GStreamerVideoWorker] = None
         self._tcp_worker: Optional[TCPCommandWorker] = None
         self._detection_worker: Optional[DetectionWorker] = None
-
+        self._target_simulator: Optional[TargetSimulator] = None
         
         # Sistem durumu
         self._current_mode = "MANUEL"
-        self._emergency_stop_active = False
         
         # UI oluştur
         self._setup_window()
@@ -182,7 +182,6 @@ class MainWindow(QMainWindow):
         self.control_panel.mode_changed.connect(self._on_mode_changed)
         self.control_panel.fire_command.connect(self._on_fire_command)
         self.control_panel.servo_command.connect(self._on_servo_command) # SERVO KONTROLÜ BURADA
-        self.control_panel.emergency_stop_toggled.connect(self._on_emergency_stop_toggled)
 
         # Video bileşeninin decode/işleme hatalarını log paneline yönlendir.
         # Önceden 'print' ile terminale yazılıyordu; arayüzden görülmüyordu.
@@ -277,8 +276,6 @@ class MainWindow(QMainWindow):
             self.log_panel.log_info("Video Worker durduruldu")
     
     def start_tcp_worker(self, host: str = None, port: int = None):
-        if self._emergency_stop_active:
-            return
         if self._tcp_worker and self._tcp_worker.isRunning():
             self.log_panel.log_warning("TCP Worker zaten çalışıyor")
             return
@@ -300,13 +297,52 @@ class MainWindow(QMainWindow):
             self._tcp_worker = None
             self.log_panel.log_info("TCP Worker durduruldu")
     
+    def start_target_simulator(self):
+        """Hedef simülasyonunu başlat"""
+        if self._target_simulator and self._target_simulator.isRunning():
+            self.log_panel.log_warning("Hedef simülasyonu zaten çalışıyor")
+            return
+        
+        self._target_simulator = TargetSimulator()
+        
+        # Görev odaklı signal bağlantıları
+        self._target_simulator.target_detected.connect(self.log_panel.log_target_detected)
+        self._target_simulator.target_lost.connect(self.log_panel.log_target_lost)
+        self._target_simulator.in_range.connect(self.log_panel.log_in_range)
+        self._target_simulator.out_of_range.connect(self.log_panel.log_out_of_range)
+        self._target_simulator.friendly_detected.connect(self.log_panel.log_friendly)
+        self._target_simulator.hostile_detected.connect(self.log_panel.log_hostile)
+        self._target_simulator.engagement_started.connect(self.log_panel.log_engagement_start)
+        self._target_simulator.engagement_result.connect(self.log_panel.log_engagement_result)
+        self._target_simulator.track_update.connect(self.log_panel.log_track_update)
+        self._target_simulator.status_changed.connect(self.log_panel.log_status)
+        
+        # Menzil göstergesi bağlantısı
+        self._target_simulator.distance_updated.connect(self.status_panel.set_target_distance)
+        
+        self._target_simulator.start_worker()
+        self.log_panel.log_info("🎯 Hedef simülasyonu başlatıldı")
+        self.status_bar.showMessage("Hedef simülasyonu aktif")
+    
+    def stop_target_simulator(self):
+        """Hedef simülasyonunu durdur"""
+        if self._target_simulator:
+            self._target_simulator.stop_worker()
+            self._target_simulator = None
+            self.log_panel.log_info("Hedef simülasyonu durduruldu")
+            self.status_panel.clear_target_distance()
+    
+    def toggle_target_simulator(self):
+        """Hedef simülasyonunu aç/kapat"""
+        if self._target_simulator and self._target_simulator.isRunning():
+            self.stop_target_simulator()
+        else:
+            self.start_target_simulator()
+    
     # ==================== SLOT'LAR ====================
     
     @Slot(str)
     def _on_mode_changed(self, mode: str):
-        if self._emergency_stop_active:
-            self.log_panel.log_warning("ACİL DURDUR aktif - mod değişimi engellendi")
-            return
         self._current_mode = mode
         self.status_panel.set_mode(mode)
         self.log_panel.log_info(f"Mod değiştirildi: {mode}")
@@ -316,9 +352,6 @@ class MainWindow(QMainWindow):
     
     @Slot()
     def _on_fire_command(self):
-        if self._emergency_stop_active:
-            self.log_panel.log_error("ACİL DURDUR aktif - Ateş komutu engellendi")
-            return
         self.log_panel.log_warning("🔥 ATEŞ KOMUTU VERİLDİ!")
         if self._tcp_worker and self._tcp_worker.isRunning():
             self._tcp_worker.send_command_binary(command_id=2, x=0, y=0, flags=1)
@@ -332,22 +365,61 @@ class MainWindow(QMainWindow):
     
     @Slot(dict)
     def _on_tcp_response(self, response: dict):
+        """
+        TCP yanıtlarını işle
+        
+        Beklenen yanıt formatı:
+        {
+            "status": "ok",
+            "target_class": "İHA",           # Opsiyonel
+            "is_friendly": false,             # Opsiyonel
+            "target_box": [x, y, w, h]       # Opsiyonel
+        }
+        """
         self.log_panel.log_info(f"TCP Yanıt: {response}")
+        
         if "status" in response:
             self.status_bar.showMessage(f"Raspberry Pi: {response['status']}")
-
-    @Slot(bool)
-    def _on_emergency_stop_toggled(self, active: bool):
-        self._emergency_stop_active = active
-        if active:
-            self.log_panel.log_error("ACİL DURDUR AKTİF")
-            self.status_bar.showMessage("ACİL DURDUR AKTİF")
-        else:
-            self.log_panel.log_info("Acil durdur kapatıldı")
-            self.status_bar.showMessage("Sistem hazır")
-        if self._tcp_worker and self._tcp_worker.isRunning():
-            self._tcp_worker.send_command_json("E_STOP", {"active": active})
+        
+        # Hedef Sınıflandırma ve IFF Verisi Parse
+        if "target_class" in response and "is_friendly" in response:
+            target_class = response["target_class"]
+            is_friendly = response["is_friendly"]
+            
+            # VideoDisplay'e hedef bilgilerini gönder
+            self.video_display.set_target_info(target_class, is_friendly)
+            
+            # StatusPanel'e güncelleme gönder
+            self.status_panel.set_target_classification(target_class, is_friendly)
+            
+            # ControlPanel'e IFF durumunu gönder (DOST ise ateş kilidi)
+            self.control_panel.set_friendly_target(is_friendly)
+            
+            # Log mesajı
+            iff_status = "DOST" if is_friendly else "DÜŞMAN"
+            self.log_panel.log_warning(f"🎯 Hedef Tespit: {target_class} ({iff_status})")
+            
+            # DOST hedef uyarısı
+            if is_friendly:
+                self.log_panel.log_warning("⚠️ DOST HEDEF - ATEŞ KİLİDİ AKTİF")
+        
+        # Hedef kutusu güncelleme (opsiyonel)
+        if "target_box" in response:
+            box = response["target_box"]
+            if len(box) == 4:
+                self.video_display.set_target_box(*box)
+        
+        # Hedef kaybedildi
+        if response.get("target_lost", False):
+            self._clear_target_data()
     
+    def _clear_target_data(self):
+        """Hedef verilerini temizle"""
+        self.video_display.clear_target_box()
+        self.status_panel.clear_target_info()
+        self.control_panel.clear_target_lock()
+        self.log_panel.log_info("Hedef kaybedildi")
+
     # ==================== PENCERE OLAYLARI ====================
     
     def closeEvent(self, event):
@@ -357,6 +429,7 @@ class MainWindow(QMainWindow):
         self.stop_udp_worker()
         self.stop_detection_worker()
         self.stop_tcp_worker()
+        self.stop_target_simulator()
         event.accept()
     
     def keyPressEvent(self, event):
@@ -367,6 +440,8 @@ class MainWindow(QMainWindow):
             if self.isFullScreen(): self.showNormal()
         elif event.key() == Qt.Key_F5:
             self._restart_connections()
+        elif event.key() == Qt.Key_F6:
+            self.toggle_target_simulator()
         else:
             super().keyPressEvent(event)
     

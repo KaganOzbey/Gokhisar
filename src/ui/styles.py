@@ -364,3 +364,43 @@ class Styles:
             padding: 6px 12px;
         }}
     """
+    
+    # IFF Badge - DOST (Yeşil glow)
+    IFF_BADGE_FRIENDLY = f"""
+        QLabel {{
+            background-color: rgba(16, 185, 129, 0.25);
+            color: #00FF00;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border: 2px solid #00FF00;
+            border-radius: 8px;
+            letter-spacing: 1.2px;
+        }}
+    """
+    
+    # IFF Badge - DÜŞMAN (Kırmızı glow)
+    IFF_BADGE_HOSTILE = f"""
+        QLabel {{
+            background-color: rgba(239, 68, 68, 0.25);
+            color: #FF0000;
+            font-size: 14px;
+            font-weight: 700;
+            padding: 8px 16px;
+            border: 2px solid #FF0000;
+            border-radius: 8px;
+            letter-spacing: 1.2px;
+        }}
+    """
+    
+    # Hedef Sınıfı Label (İkon yanında)
+    TARGET_CLASS_LABEL = f"""
+        QLabel {{
+            color: {Colors.TEXT_PRIMARY};
+            font-size: 13px;
+            font-weight: 600;
+            padding: 4px 8px;
+            background-color: rgba(79, 131, 255, 0.1);
+            border-radius: 6px;
+        }}
+    """

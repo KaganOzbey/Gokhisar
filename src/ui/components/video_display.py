@@ -47,6 +47,10 @@ class VideoDisplay(QFrame):
         self._target_box = None      # (x, y, w, h) tuple
         self._crosshair_pos = None   # (x, y) tuple
         self._show_crosshair = True
+        
+        # Hedef Sınıflandırma ve IFF
+        self._target_class = ""      # "Balistik Füze", "İHA", "Helikopter", vb.
+        self._is_friendly = None     # True=DOST, False=DÜŞMAN, None=Bilinmiyor
 
         self._last_pixmap = None
 
@@ -166,8 +170,8 @@ class VideoDisplay(QFrame):
                 QImage.Format_RGB888
             ).copy()
 
-            # Crosshair, hedef kutusu, ve YOLO detection'ları çiz
-            if self._show_crosshair or self._target_box or (self._show_detections and self._detections):
+            # Crosshair, hedef kutusu, IFF etiketi ve YOLO detection overlay'lerini çiz
+            if self._show_crosshair or self._target_box or self._target_class or (self._show_detections and self._detections):
                 q_img = self._draw_overlays(q_img)
 
             self._last_pixmap = QPixmap.fromImage(q_img)
@@ -197,13 +201,29 @@ class VideoDisplay(QFrame):
             Qt.SmoothTransformation
         )
         self.video_label.setPixmap(scaled)
+    
+    def _render_with_overlays(self):
+        """Mevcut frame'i overlay'lerle birlikte yeniden çiz"""
+        if not self._last_pixmap:
+            return
+        
+        # QPixmap'ten QImage'e dönüştür
+        img = self._last_pixmap.toImage()
+        
+        # Overlay'leri çiz
+        if self._show_crosshair or self._target_box or self._target_class:
+            img = self._draw_overlays(img)
+        
+        # Yeni pixmap oluştur ve render et
+        self._last_pixmap = QPixmap.fromImage(img)
+        self._render_pixmap()
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
         self._render_pixmap()
     
     def _draw_overlays(self, q_img: QImage) -> QImage:
-        """Crosshair, hedef kutusu ve YOLO detection bbox'larını çiz."""
+        """Crosshair, hedef kutusu, sınıf etiketi, IFF göstergesi ve YOLO detection bbox'larını çiz."""
         img = q_img.copy()
         painter = QPainter(img)
 
@@ -220,13 +240,55 @@ class VideoDisplay(QFrame):
             painter.drawLine(center_x, center_y - size, center_x, center_y + size)
             painter.drawEllipse(center_x - 5, center_y - 5, 10, 10)
 
-        # Hedef kutusu çiz (manuel set_target_box ile gelen)
+        # Hedef kutusu çiz (IFF renklendirmeli)
         if self._target_box:
             x, y, w, h = self._target_box
-            pen = QPen(QColor(255, 0, 0), 3)
+            
+            # IFF durumuna göre renk seçimi
+            if self._is_friendly is True:
+                box_color = QColor(0, 255, 0)      # DOST - Parlak Yeşil
+                text_color = QColor(0, 255, 0)
+            elif self._is_friendly is False:
+                box_color = QColor(255, 0, 0)      # DÜŞMAN - Parlak Kırmızı
+                text_color = QColor(255, 0, 0)
+            else:
+                box_color = QColor(255, 255, 0)    # BİLİNMİYOR - Sarı
+                text_color = QColor(255, 255, 0)
+            
+            # Hedef kutusu çiz
+            pen = QPen(box_color, 3)
             painter.setPen(pen)
             painter.drawRect(x, y, w, h)
-            painter.drawText(x, y - 5, "HEDEF")
+
+            # Hedef sınıfı etiketi (kutunun üst kısmı)
+            if self._target_class:
+                # Yarı şeffaf arka plan için font metrikleri
+                from PySide6.QtGui import QFont, QFontMetrics
+                font = QFont("Segoe UI", 12, QFont.Bold)
+                painter.setFont(font)
+                metrics = QFontMetrics(font)
+
+                label_text = self._target_class.upper()
+                text_width = metrics.horizontalAdvance(label_text)
+                text_height = metrics.height()
+
+                # Etiket arka planı (yarı şeffaf siyah)
+                label_x = x
+                label_y = y - text_height - 10
+                if label_y < 0:
+                    label_y = y + h + 5  # Kutu üstüne sığmazsa altına çiz
+
+                painter.setBrush(QColor(0, 0, 0, 180))  # Yarı şeffaf siyah
+                painter.setPen(QPen(QColor(0, 0, 0, 0)))  # Kenarlık yok
+                painter.drawRect(label_x - 5, label_y - 2, text_width + 10, text_height + 4)
+
+                # Metin çizimi
+                painter.setPen(text_color)
+                painter.drawText(label_x, label_y + text_height - 4, label_text)
+
+            # "HEDEF" yazısı (sağ üst köşe)
+            painter.setPen(text_color)
+            painter.drawText(x + w - 60, y - 5, "HEDEF")
 
         # YOLO detection bounding box'ları
         if self._show_detections and self._detections:
@@ -298,11 +360,37 @@ class VideoDisplay(QFrame):
     def set_target_box(self, x: int, y: int, w: int, h: int):
         """Hedef kutusunu ayarla"""
         self._target_box = (x, y, w, h)
+        
+        # Mevcut frame'i yeniden render et
+        if self._last_pixmap:
+            self._render_with_overlays()
     
     @Slot()
     def clear_target_box(self):
         """Hedef kutusunu temizle"""
         self._target_box = None
+        self._target_class = ""
+        self._is_friendly = None
+        
+        # Mevcut frame'i yeniden render et (overlay'ler temizlensin)
+        if self._last_pixmap:
+            self._render_with_overlays()
+    
+    @Slot(str, bool)
+    def set_target_info(self, target_class: str, is_friendly: bool):
+        """
+        Hedef sınıflandırma ve IFF bilgilerini ayarla
+        
+        Args:
+            target_class: "Balistik Füze", "İHA", "Helikopter", "Savaş Uçağı", vb.
+            is_friendly: True=DOST, False=DÜŞMAN
+        """
+        self._target_class = target_class
+        self._is_friendly = is_friendly
+        
+        # Mevcut frame'i yeniden render et (overlay'ler güncellensin)
+        if self._last_pixmap:
+            self._render_with_overlays()
     
     @Slot(bool)
     def set_crosshair_visible(self, visible: bool):
