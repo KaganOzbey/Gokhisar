@@ -88,11 +88,17 @@ def main():
     # Ağ bağlantılarını başlat (test modu değilse)
     if not args.test_ui:
         print("Ağ bağlantıları başlatılıyor...")
-        # UDP ve TCP worker'ları başlat
-        # Not: Gerçek bağlantı için Raspberry Pi'nin açık olması gerekir
-        # window.start_udp_worker()
+        # Video akışı: UDP üzerinden gelen RTP/JPEG paketlerini GStreamer
+        # subprocess'i ile depay edip arayüze veriyoruz. Yayıncı (Raspberry Pi
+        # / kamera) henüz açık değilse de udpsrc sessizce paket bekler;
+        # zarar yok. Bu yüzden burada otomatik başlatıyoruz.
+        window.start_udp_worker()
+
+        # TCP komut bağlantısı: Raspberry Pi açık değilse hata loga düşer.
+        # İstersen burada da otomatik başlatabilirsin; şimdilik manuel (F5)
+        # bırakıyoruz çünkü bağlantı hatası kullanıcıyı yormasın.
         # window.start_tcp_worker()
-        print("Not: Ağ bağlantıları manuel olarak başlatılmalı (F5 veya UI üzerinden)")
+        print("İpucu: TCP bağlantısını başlatmak için F5'e basın.")
     else:
         print("TEST MODU: Ağ bağlantıları devre dışı")
     

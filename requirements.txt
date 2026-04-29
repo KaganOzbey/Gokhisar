@@ -3,5 +3,16 @@
 
 PySide6==6.5.2
 pyserial==3.5
-numpy==1.24.3
+# NumPy sürümü iki kısıt ile sınırlandırıldı:
+# - Alt sınır 1.26.1: best.pt modeli NumPy 2.x ile kaydedildiği için
+#   pickle yüklerken numpy._core (>=1.26.1'de bulunan symbol map) gerekli.
+# - Üst sınır <2.0: opencv-python==4.8.0.76 wheel'i NumPy 1.x ABI ile
+#   derlenmiş; NumPy 2.x'te "AttributeError: _ARRAY_API not found" hatası verir.
+# OpenCV'yi 4.10+ sürümüne yükseltirseniz bu üst sınırı kaldırabilirsiniz.
+numpy>=1.26.1,<2.0
 opencv-python==4.8.0.76
+
+# Görüntü işleme / nesne tespiti (YOLOv8)
+# torch ve torchvision otomatik kurulur. CUDA varsa GPU sürümü çekilir,
+# yoksa CPU sürümü kurulur. Boyut: ~250 MB (CPU) / ~2 GB (CUDA).
+ultralytics>=8.2,<9

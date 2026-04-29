@@ -33,6 +33,8 @@ from src.ui.components.status_panel import StatusPanel
 from src.ui.components.control_panel import ControlPanel
 from src.ui.components.log_panel import LogPanel
 from src.workers.network_worker import UDPVideoWorker, TCPCommandWorker
+from src.workers.gstreamer_video_worker import GStreamerVideoWorker
+from src.workers.detection_worker import DetectionWorker
 
 
 class MainWindow(QMainWindow):
@@ -50,8 +52,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         
         # Worker referansları
-        self._udp_worker: Optional[UDPVideoWorker] = None
+        # Not: _udp_worker artık GStreamer tabanlı (RTP/JPEG depay yapıyor).
+        # Aynı sinyal sözleşmesini koruduğumuz için tip Union halinde tutulabilir.
+        self._udp_worker: Optional[GStreamerVideoWorker] = None
         self._tcp_worker: Optional[TCPCommandWorker] = None
+        self._detection_worker: Optional[DetectionWorker] = None
 
         
         # Sistem durumu
@@ -178,6 +183,10 @@ class MainWindow(QMainWindow):
         self.control_panel.fire_command.connect(self._on_fire_command)
         self.control_panel.servo_command.connect(self._on_servo_command) # SERVO KONTROLÜ BURADA
         self.control_panel.emergency_stop_toggled.connect(self._on_emergency_stop_toggled)
+
+        # Video bileşeninin decode/işleme hatalarını log paneline yönlendir.
+        # Önceden 'print' ile terminale yazılıyordu; arayüzden görülmüyordu.
+        self.video_display.error_occurred.connect(self.log_panel.log_error)
     
     def _log_system_info(self):
         """Sistem bilgilerini logla"""
@@ -190,24 +199,82 @@ class MainWindow(QMainWindow):
     # ==================== WORKER YÖNETİMİ ====================
     
     def start_udp_worker(self, port: int = None):
+        """
+        Video akışı worker'ını başlat.
+
+        İçeride RTP/JPEG depay işini GStreamer'a yaptıran bir subprocess
+        worker (GStreamerVideoWorker) kullanılır; UI tarafından bakıldığında
+        eski UDPVideoWorker ile aynı sinyallere sahip olduğu için bu detay
+        şeffaftır (Liskov Substitution).
+
+        Aynı zamanda DetectionWorker'ı da başlatır ve frame_received sinyalini
+        hem VideoDisplay'e hem de DetectionWorker'a "fan-out" eder. Böylece
+        ekrana ham görüntü gösterilirken paralel olarak YOLO inference çalışır.
+        """
         if self._udp_worker and self._udp_worker.isRunning():
-            self.log_panel.log_warning("UDP Worker zaten çalışıyor")
+            self.log_panel.log_warning("Video Worker zaten çalışıyor")
             return
-        
+
         port = port or NetworkConfig.UDP_VIDEO_PORT
-        self._udp_worker = UDPVideoWorker(port=port)
+
+        # 1) Detection worker'ı önce başlat ki ilk frame geldiğinde hazır olsun.
+        self._start_detection_worker()
+
+        # 2) GStreamer video worker'ı kur
+        self._udp_worker = GStreamerVideoWorker(port=port)
         self._udp_worker.frame_received.connect(self.video_display.update_frame_from_bytes)
+        # Frame'i detection'a da yolla — ama submit_frame doğrudan slot olduğundan
+        # Qt.DirectConnection ile çağırırsak GStreamer thread'inde yürür ve
+        # mutex ile zaten korunuyor. Sinyal üzerinden de çalışır;
+        # default Qt connection AutoConnection: aynı thread'deyse direct,
+        # değilse queued. Submit_frame thread-safe olduğu için her iki yol da OK.
+        if self._detection_worker is not None:
+            self._udp_worker.frame_received.connect(self._detection_worker.submit_frame)
+
         self._udp_worker.connection_status.connect(self.status_panel.set_udp_status)
         self._udp_worker.status_changed.connect(self.log_panel.log_status)
         self._udp_worker.error_occurred.connect(self.log_panel.log_error)
         self._udp_worker.start_worker()
-        self.log_panel.log_info(f"UDP Worker başlatıldı (Port: {port})")
+        self.log_panel.log_info(f"GStreamer Video Worker başlatıldı (UDP {port})")
+
+    def _start_detection_worker(self):
+        """
+        YOLO detection worker'ını idempotent olarak başlat.
+
+        Idempotent = "birden fazla çağrılırsa zarar vermez". F5 ile bağlantı
+        yenilenirken yeniden çağrılır; modeli her seferinde yeniden yüklemek
+        israf olur, bu yüzden çalışan worker varsa korur.
+        """
+        if self._detection_worker and self._detection_worker.isRunning():
+            return
+        self._detection_worker = DetectionWorker()
+        self._detection_worker.detections_ready.connect(self.video_display.set_detections)
+        self._detection_worker.status_changed.connect(self.log_panel.log_status)
+        self._detection_worker.error_occurred.connect(self.log_panel.log_error)
+        self._detection_worker.model_loaded.connect(self._on_model_loaded)
+        self._detection_worker.start_worker()
+        self.log_panel.log_info("YOLO Detection Worker başlatıldı")
+
+    def stop_detection_worker(self):
+        if self._detection_worker:
+            self._detection_worker.stop_worker()
+            self._detection_worker = None
+            self.log_panel.log_info("Detection Worker durduruldu")
+
+    @Slot(bool, str)
+    def _on_model_loaded(self, ok: bool, info: str):
+        if ok:
+            self.log_panel.log_info(f"Model: {info}")
+            self.status_bar.showMessage(f"Model: {info}")
+        else:
+            self.log_panel.log_error(f"Model: {info}")
+            self.status_bar.showMessage("Model yüklenemedi")
     
     def stop_udp_worker(self):
         if self._udp_worker:
             self._udp_worker.stop_worker()
             self._udp_worker = None
-            self.log_panel.log_info("UDP Worker durduruldu")
+            self.log_panel.log_info("Video Worker durduruldu")
     
     def start_tcp_worker(self, host: str = None, port: int = None):
         if self._emergency_stop_active:
@@ -284,7 +351,11 @@ class MainWindow(QMainWindow):
     # ==================== PENCERE OLAYLARI ====================
     
     def closeEvent(self, event):
+        # Worker kapanış sırası: önce frame üretici (UDP), sonra tüketici
+        # (Detection). Aksi sırada detection halen frame işlerken UDP
+        # kapanırsa sorun olmaz ama tersine kapatmak en güvenlisi.
         self.stop_udp_worker()
+        self.stop_detection_worker()
         self.stop_tcp_worker()
         event.accept()
     
