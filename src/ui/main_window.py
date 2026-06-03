@@ -21,7 +21,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QMessageBox, QStatusBar, QSizePolicy
+    QMessageBox, QStatusBar, QSizePolicy, QStackedWidget, QLabel, QPushButton, QFrame
 )
 from PySide6.QtCore import Qt, Slot, QTimer
 from PySide6.QtGui import QGuiApplication  # Boyutlandırma görevi için eklendi
@@ -98,75 +98,171 @@ class MainWindow(QMainWindow):
 
         self.setStyleSheet(Styles.MAIN_WINDOW)
         
-        # Tam ekran için F11 kısayolu
-        # self.showMaximized()  # Opsiyonel: başlangıçta tam ekran
+        # Başlangıçta maximize edilmiş pencere (tam ekran değil, pencere başlığı görünür)
+        # F11 ile gerçek tam ekrana geçilebilir
+        self.showMaximized()
     
     def _setup_ui(self):
-        """
-        UI bileşenlerini oluştur ve yerleştir
-        
-        Layout yapısı:
-        ┌─────────────────────────────────────────────┐
-        │  ┌─────────────────┐ ┌───────────────────┐  │
-        │  │                 │ │   Status Panel    │  │
-        │  │                 │ ├───────────────────┤  │
-        │  │  Video Display  │ │                   │  │
-        │  │                 │ │  Control Panel    │  │
-        │  │                 │ │                   │  │
-        │  └─────────────────┘ └───────────────────┘  │
-        │  ┌─────────────────────────────────────────┐│
-        │  │            Log Panel                    ││
-        │  └─────────────────────────────────────────┘│
-        └─────────────────────────────────────────────┘
-        """
-        # Ana widget
+        # QStackedWidget: 0=splash, 1=ana arayüz
+        self._stack = QStackedWidget()
+        self.setCentralWidget(self._stack)
+
+        # Splash sayfası (index 0)
+        self._stack.addWidget(self._build_splash())
+
+        # Ana arayüz sayfası (index 1)
         central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        
-        # Ana dikey layout
+        self._stack.addWidget(central_widget)
+        self._stack.setCurrentIndex(0)
+
+        # Ana layout: dikey — üst satır (Sol|Orta|Sağ) + alt log
         main_layout = QVBoxLayout(central_widget)
         main_layout.setSpacing(4)
         main_layout.setContentsMargins(4, 4, 4, 4)
-        
-        # Üst Bölüm: Video (Sol) + Sağ Panel (Status + Control)
-        upper_layout = QHBoxLayout()
-        upper_layout.setSpacing(4)
-        
-        # 1. Video Görüntüleme (Sol - En çok alanı kaplar)
-        self.video_display = VideoDisplay()
-        self.video_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        upper_layout.addWidget(self.video_display, stretch=1)
-        
-        # 2. Sağ Panel Konteyneri (Dikey: Status + Control)
-        right_panel_widget = QWidget()
-        right_panel_widget.setFixedWidth(280)
-        right_panel_layout = QVBoxLayout(right_panel_widget)
-        right_panel_layout.setContentsMargins(0, 0, 0, 0)
-        right_panel_layout.setSpacing(4)
-        
-        # Sistem Durumu
+
+        # ── Üst satır: Sol=Durum | Orta=Video | Sağ=Kontrol ──────────
+        top_row = QHBoxLayout()
+        top_row.setSpacing(4)
+
+        # Sol: Sistem Durumu
+        left_widget = QWidget()
+        left_widget.setFixedWidth(280)
+        left_widget.setStyleSheet("background:transparent;")
+        left_layout = QVBoxLayout(left_widget)
+        left_layout.setContentsMargins(4, 0, 0, 0)
+        left_layout.setSpacing(4)
         self.status_panel = StatusPanel()
         self.status_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
-        right_panel_layout.addWidget(self.status_panel)
-        
-        # Kontrol Paneli
-        self.control_panel = ControlPanel()
-        self.control_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
-        right_panel_layout.addWidget(self.control_panel)
+        left_layout.addWidget(self.status_panel)
+        left_layout.addStretch(1)
+        top_row.addWidget(left_widget, stretch=0)
 
-        # --- Boyutlandırma Görevi: Elemanları yukarı yaslamak için stretch ekle ---
-        right_panel_layout.addStretch()
-        
-        upper_layout.addWidget(right_panel_widget, stretch=0)
-        
-        main_layout.addLayout(upper_layout, stretch=1)
-        
-        # Alt Bölüm: Log Paneli (Tam genişlik)
+        # Orta: Video
+        self.video_display = VideoDisplay()
+        self.video_display.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        top_row.addWidget(self.video_display, stretch=1)
+
+        # Sağ: Kontrol Paneli
+        right_widget = QWidget()
+        right_widget.setFixedWidth(310)
+        right_widget.setStyleSheet("background:transparent;")
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 4, 0)
+        right_layout.setSpacing(4)
+        self.control_panel = ControlPanel()
+        self.control_panel.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        right_layout.addWidget(self.control_panel)
+        right_layout.addStretch(1)
+        top_row.addWidget(right_widget, stretch=0)
+
+        main_layout.addLayout(top_row, stretch=1)
+
+        # ── Alt: Log paneli tam genişlik ──────────────────────────────
         self.log_panel = LogPanel()
         self.log_panel.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.log_panel.setFixedHeight(160)
+        self.log_panel.setFixedHeight(130)
         main_layout.addWidget(self.log_panel, stretch=0)
-    
+
+
+    def _build_splash(self) -> QWidget:
+        """Başlangıç / splash sayfası"""
+        page = QWidget()
+        page.setStyleSheet("background:transparent;")
+        L = QVBoxLayout(page)
+        L.setAlignment(Qt.AlignCenter)
+        L.setSpacing(0)
+        L.setContentsMargins(40, 40, 40, 40)
+
+        L.addStretch(2)
+
+        icon = QLabel("✈")
+        icon.setAlignment(Qt.AlignCenter)
+        icon.setStyleSheet("font-size:64px; color:#00d4ff; background:transparent;")
+        L.addWidget(icon)
+        L.addSpacing(16)
+
+        title = QLabel("GÖKHİSAR")
+        title.setAlignment(Qt.AlignCenter)
+        title.setStyleSheet("font-size:56px; font-weight:800; color:#ffffff; background:transparent;")
+        L.addWidget(title)
+        L.addSpacing(8)
+
+        subtitle = QLabel("YER KONTROL İSTASYONU")
+        subtitle.setAlignment(Qt.AlignCenter)
+        subtitle.setStyleSheet("font-size:18px; font-weight:600; color:#00d4ff; background:transparent;")
+        L.addWidget(subtitle)
+        L.addSpacing(8)
+
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setStyleSheet("background:rgba(0,212,255,0.35); border:none; max-height:1px;")
+        L.addWidget(line)
+        L.addSpacing(8)
+
+        version = QLabel("NT1 Hava Savunma Platformu  •  v1.0")
+        version.setAlignment(Qt.AlignCenter)
+        version.setStyleSheet("font-size:12px; color:#6b7280; background:transparent;")
+        L.addWidget(version)
+
+        L.addStretch(2)
+
+        self._splash_status = QLabel("Sistem başlatılmaya hazır...")
+        self._splash_status.setAlignment(Qt.AlignCenter)
+        self._splash_status.setStyleSheet("font-size:13px; color:#9aa4b2; background:transparent;")
+        L.addWidget(self._splash_status)
+        L.addSpacing(16)
+
+        btn = QPushButton("  BAŞLAT  ")
+        btn.setFixedHeight(52)
+        btn.setFixedWidth(200)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: rgba(0,212,255,0.15);
+                color: #e6eaf2;
+                font-size:16px; font-weight:700;
+                border: 2px solid rgba(0,212,255,0.5);
+                border-radius: 10px;
+            }
+            QPushButton:hover {
+                background-color: rgba(0,212,255,0.3);
+                border-color: #00d4ff;
+            }
+            QPushButton:pressed { background-color: rgba(0,212,255,0.45); }
+        """)
+        btn.clicked.connect(self._launch_main_ui)
+
+        wrap = QHBoxLayout()
+        wrap.addStretch(); wrap.addWidget(btn); wrap.addStretch()
+        L.addLayout(wrap)
+
+        L.addStretch(1)
+
+        footer = QLabel("Enter veya Space ile de başlatabilirsiniz")
+        footer.setAlignment(Qt.AlignCenter)
+        footer.setStyleSheet("font-size:11px; color:#374151; background:transparent;")
+        L.addWidget(footer)
+        L.addSpacing(20)
+
+        # Animasyon timer
+        self._dot_count = 0
+        from PySide6.QtCore import QTimer
+        self._dot_timer = QTimer(self)
+        self._dot_timer.timeout.connect(self._animate_splash)
+        self._dot_timer.start(600)
+
+        return page
+
+    def _animate_splash(self):
+        self._dot_count = (self._dot_count + 1) % 4
+        self._splash_status.setText("Sistem başlatılmaya hazır" + "." * self._dot_count)
+
+    def _launch_main_ui(self):
+        """Splash'ten ana arayüze geç"""
+        self._dot_timer.stop()
+        self._splash_status.setText("Başlatılıyor...")
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(300, lambda: self._stack.setCurrentIndex(1))
+
     def _setup_status_bar(self):
         """Durum çubuğunu ayarla"""
         self.status_bar = QStatusBar()
@@ -181,7 +277,10 @@ class MainWindow(QMainWindow):
         # Kontrol paneli signal'ları
         self.control_panel.mode_changed.connect(self._on_mode_changed)
         self.control_panel.fire_command.connect(self._on_fire_command)
-        self.control_panel.servo_command.connect(self._on_servo_command) # SERVO KONTROLÜ BURADA
+        self.control_panel.servo_command.connect(self._on_servo_command)
+        self.control_panel.system_start.connect(self._on_system_start)
+        self.control_panel.system_stop.connect(self._on_system_stop)
+        self.control_panel.system_reset.connect(self._on_system_reset) # SERVO KONTROLÜ BURADA
 
         # Video bileşeninin decode/işleme hatalarını log paneline yönlendir.
         # Önceden 'print' ile terminale yazılıyordu; arayüzden görülmüyordu.
@@ -341,6 +440,29 @@ class MainWindow(QMainWindow):
     
     # ==================== SLOT'LAR ====================
     
+    @Slot()
+    def _on_system_start(self):
+        self.log_panel.log_info("🟢 Sistem başlatıldı")
+        self.status_bar.showMessage("Sistem aktif")
+        self.start_udp_worker()
+        self.start_tcp_worker()
+
+    @Slot()
+    def _on_system_stop(self):
+        self.log_panel.log_warning("🔴 Sistem durduruldu")
+        self.status_bar.showMessage("Sistem durduruldu")
+        self.stop_udp_worker()
+        self.stop_tcp_worker()
+
+    @Slot()
+    def _on_system_reset(self):
+        self.log_panel.log_info("🔄 Sistem sıfırlandı")
+        self.status_bar.showMessage("Sistem sıfırlandı")
+        self.stop_udp_worker()
+        self.stop_tcp_worker()
+        self.status_panel.clear_target_info()
+        self.status_panel.clear_target_distance()
+
     @Slot(str)
     def _on_mode_changed(self, mode: str):
         self._current_mode = mode
@@ -433,6 +555,11 @@ class MainWindow(QMainWindow):
         event.accept()
     
     def keyPressEvent(self, event):
+        # Splash ekranındayken Enter/Space ile başlat
+        if self._stack.currentIndex() == 0:
+            if event.key() in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+                self._launch_main_ui()
+                return
         if event.key() == Qt.Key_F11:
             if self.isFullScreen(): self.showNormal()
             else: self.showFullScreen()
