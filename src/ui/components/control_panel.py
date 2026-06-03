@@ -1,351 +1,328 @@
 """
-Kontrol Paneli Bileşeni
-
-Manuel kontrol (servo), mod seçimi ve ateş kontrolü için panel.
-Güvenlik: ATEŞ butonu varsayılan olarak kilitli.
+Kontrol Paneli - v4 compact
 """
-
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QGroupBox, QPushButton, QSlider, QButtonGroup, QSizePolicy
+    QPushButton, QSlider, QButtonGroup, QSizePolicy, QDoubleSpinBox
 )
 from PySide6.QtCore import Qt, Signal, Slot
-
 from src.ui.styles import Styles
 
+# ── Yardımcılar ───────────────────────────────────────────────────────────────
+
+def _sep():
+    f = QFrame(); f.setFrameShape(QFrame.HLine)
+    f.setStyleSheet("background:rgba(255,255,255,0.07); border:none;")
+    f.setFixedHeight(1)
+    return f
+
+def _sec(text):
+    l = QLabel(text)
+    l.setStyleSheet(
+        "font-family: Arial; font-size: 13px; font-weight: 700; "
+        "color: #00d4ff; background: transparent; padding: 3px 0px;"
+    )
+    l.setFixedHeight(22)
+    return l
+
+def _pid_spin(val=0.0):
+    sb = QDoubleSpinBox()
+    sb.setRange(0.0, 99.99); sb.setSingleStep(0.01)
+    sb.setValue(val); sb.setDecimals(2)
+    sb.setFixedHeight(26)
+    sb.setStyleSheet("""
+        QDoubleSpinBox {
+            background:rgba(255,255,255,0.05); color:#00d4ff;
+            font-size:11px; font-weight:700;
+            border:1px solid rgba(0,212,255,0.3); border-radius:4px;
+            padding:1px 4px;
+        }
+        QDoubleSpinBox::up-button,QDoubleSpinBox::down-button{
+            width:14px; background:rgba(0,212,255,0.15); border:none;
+        }
+    """)
+    return sb
+
+# ── Servo Widget ──────────────────────────────────────────────────────────────
 
 class ServoControlWidget(QFrame):
-    """
-    Servo motor kontrol widget'ı
-    
-    X ve Y ekseni için slider'lar ve değer göstergeleri.
-    
-    Signals:
-    - servo_changed(x, y): Servo değerleri değiştiğinde emit edilir
-    """
-    
-    servo_changed = Signal(int, int)  # x, y değerleri
-    
+    servo_changed = Signal(int, int)
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """UI oluştur"""
-        self.setStyleSheet("background: transparent; border: none;")
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(4)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # X ekseni (Azimuth)
-        x_layout = QHBoxLayout()
-        x_label = QLabel("Azimuth")
-        x_label.setStyleSheet(Styles.SUBTITLE_LABEL)
-        x_label.setMinimumWidth(60)
-        
-        self.x_slider = QSlider(Qt.Horizontal)
-        self.x_slider.setRange(-180, 180)
-        self.x_slider.setValue(0)
-        self.x_slider.setStyleSheet(Styles.SLIDER)
-        
-        self.x_value = QLabel("0°")
-        self.x_value.setStyleSheet(Styles.SUBTITLE_LABEL)
-        self.x_value.setMinimumWidth(50)
-        
-        x_layout.addWidget(x_label)
-        x_layout.addWidget(self.x_slider)
-        x_layout.addWidget(self.x_value)
-        layout.addLayout(x_layout)
-        
-        # Y ekseni (Elevation)
-        y_layout = QHBoxLayout()
-        y_label = QLabel("Elevation")
-        y_label.setStyleSheet(Styles.SUBTITLE_LABEL)
-        y_label.setMinimumWidth(60)
-        
-        self.y_slider = QSlider(Qt.Horizontal)
-        self.y_slider.setRange(-90, 90)
-        self.y_slider.setValue(0)
-        self.y_slider.setStyleSheet(Styles.SLIDER)
-        
-        self.y_value = QLabel("0°")
-        self.y_value.setStyleSheet(Styles.SUBTITLE_LABEL)
-        self.y_value.setMinimumWidth(50)
-        
-        y_layout.addWidget(y_label)
-        y_layout.addWidget(self.y_slider)
-        y_layout.addWidget(self.y_value)
-        layout.addLayout(y_layout)
-        
-        # Signal bağlantıları
-        self.x_slider.valueChanged.connect(self._on_x_changed)
-        self.y_slider.valueChanged.connect(self._on_y_changed)
-    
-    def _on_x_changed(self, value: int):
-        """X slider değiştiğinde"""
-        self.x_value.setText(f"{value}°")
-        self._emit_servo_changed()
-    
-    def _on_y_changed(self, value: int):
-        """Y slider değiştiğinde"""
-        self.y_value.setText(f"{value}°")
-        self._emit_servo_changed()
-    
-    def _emit_servo_changed(self):
-        """Servo değerlerini emit et"""
-        self.servo_changed.emit(self.x_slider.value(), self.y_slider.value())
-    
-    def _reset_position(self):
-        """Servo pozisyonunu sıfırla"""
-        self.x_slider.setValue(0)
-        self.y_slider.setValue(0)
-    
-    def reset_position(self):
-        """Public reset method"""
-        self._reset_position()
-    
-    def get_position(self) -> tuple:
-        """Mevcut servo pozisyonunu döndür"""
-        return (self.x_slider.value(), self.y_slider.value())
-    
-    @Slot(int, int)
-    def set_position(self, x: int, y: int):
-        """Servo pozisyonunu ayarla (dışarıdan)"""
-        self.x_slider.blockSignals(True)
-        self.y_slider.blockSignals(True)
-        
-        self.x_slider.setValue(x)
-        self.y_slider.setValue(y)
-        self.x_value.setText(f"{x}°")
-        self.y_value.setText(f"{y}°")
-        
-        self.x_slider.blockSignals(False)
-        self.y_slider.blockSignals(False)
+        self.setStyleSheet("background:transparent; border:none;")
+        L = QVBoxLayout(self)
+        L.setSpacing(5); L.setContentsMargins(0,0,0,0)
 
+        # Azimuth + Elevation
+        for attr, txt, lo, hi in [("x","Azimuth",-180,180),("y","Elevation",-90,90)]:
+            row = QHBoxLayout(); row.setSpacing(4)
+            lbl = QLabel(txt)
+            lbl.setStyleSheet("color:#c8cdd6;font-size:11px;font-weight:600;"
+                              "background:transparent;border:none;")
+            lbl.setFixedWidth(54)
+            row.addWidget(lbl)
+            sl = QSlider(Qt.Horizontal)
+            sl.setRange(lo,hi); sl.setValue(0)
+            sl.setStyleSheet(Styles.SLIDER)
+            row.addWidget(sl, stretch=1)
+            val = QLabel("0°")
+            val.setStyleSheet("color:#00d4ff;font-size:11px;font-weight:700;"
+                              "min-width:30px;background:transparent;border:none;")
+            val.setAlignment(Qt.AlignRight|Qt.AlignVCenter)
+            row.addWidget(val)
+            L.addLayout(row)
+            if attr=="x": self.x_slider,self.x_value = sl,val
+            else:          self.y_slider,self.y_value = sl,val
+
+        self.x_slider.valueChanged.connect(lambda v:(self.x_value.setText(f"{v}°"),self._emit()))
+        self.y_slider.valueChanged.connect(lambda v:(self.y_value.setText(f"{v}°"),self._emit()))
+
+        # PID — 3 sütun yan yana
+        pid_row = QHBoxLayout(); pid_row.setSpacing(6)
+        for lbl_txt, attr, default in [("P","pid_p",1.0),("I","pid_i",0.0),("D","pid_d",0.1)]:
+            col = QVBoxLayout(); col.setSpacing(1)
+            l = QLabel(lbl_txt)
+            l.setAlignment(Qt.AlignCenter)
+            l.setStyleSheet("color:#9aa4b2;font-size:10px;font-weight:700;"
+                            "background:transparent;border:none;")
+            l.setFixedHeight(14)
+            col.addWidget(l)
+            sb = _pid_spin(default)
+            col.addWidget(sb)
+            pid_row.addLayout(col)
+            setattr(self, attr, sb)
+        L.addLayout(pid_row)
+
+    def _emit(self): self.servo_changed.emit(self.x_slider.value(),self.y_slider.value())
+    def reset_position(self): self.x_slider.setValue(0); self.y_slider.setValue(0)
+    def get_position(self): return (self.x_slider.value(),self.y_slider.value())
+    def get_pid(self): return (self.pid_p.value(),self.pid_i.value(),self.pid_d.value())
+
+    @Slot(int,int)
+    def set_position(self,x,y):
+        self.x_slider.blockSignals(True); self.y_slider.blockSignals(True)
+        self.x_slider.setValue(x); self.y_slider.setValue(y)
+        self.x_value.setText(f"{x}°"); self.y_value.setText(f"{y}°")
+        self.x_slider.blockSignals(False); self.y_slider.blockSignals(False)
+
+# ── Kontrol Paneli ────────────────────────────────────────────────────────────
 
 class ControlPanel(QFrame):
-    """
-    Ana kontrol paneli
-    
-    İçerik:
-    - Mod seçimi (Manuel, Yarı Otonom, Tam Otonom)
-    - Servo kontrol
-    - Ateş kontrolü (güvenlik kilidi ile)
-    
-    Signals:
-    - mode_changed(str): Mod değiştiğinde
-    - fire_command(): Ateş komutu verildiğinde
-    - servo_command(x, y): Servo komutu gönderildiğinde
-    """
-    
-    mode_changed = Signal(str)
-    fire_command = Signal()
-    servo_command = Signal(int, int)
-    
+    mode_changed  = Signal(str)
+    fire_command  = Signal()
+    servo_command = Signal(int,int)
+    system_start  = Signal()
+    system_stop   = Signal()
+    system_reset  = Signal()
+
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._fire_unlocked = False  # Güvenlik kilidi
+        self._fire_unlocked = False
         self._emergency_active = False
-        self._is_friendly_target = None  # IFF durumu (DOST hedeflerde ateş kilidi)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """UI oluştur"""
-        self.setStyleSheet(Styles.PANEL)
-        self.setMinimumWidth(280)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(8, 8, 8, 8)
-        
+        self._is_friendly_target = None
+
+        self.setStyleSheet("QFrame{background:rgba(22,30,48,0.95);"
+                           "border:1px solid rgba(255,255,255,0.07);border-radius:14px;}")
+        self.setFixedWidth(302)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        L = QVBoxLayout(self)
+        L.setSpacing(5); L.setContentsMargins(10,10,10,10)
+
         # Başlık
-        title = QLabel("KONTROL PANELİ")
-        title.setStyleSheet(Styles.TITLE_LABEL)
-        title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-        
-        # Mod seçimi
-        mode_group = QGroupBox("Çalışma Modu")
-        mode_group.setStyleSheet(Styles.GROUP_BOX)
-        mode_layout = QHBoxLayout(mode_group)
-        mode_layout.setSpacing(4)
-        mode_layout.setContentsMargins(6, 4, 6, 6)
-        
+        t = QLabel("KONTROL PANELİ")
+        t.setAlignment(Qt.AlignCenter)
+        t.setStyleSheet(
+            "font-family: Arial; font-size: 20px; font-weight: 800; "
+            "color: #ffffff; background: transparent; padding: 6px 0px;"
+        )
+        L.addWidget(t)
+        L.addWidget(_sep())
+
+        # ── Sistem ────────────────────────────────────────────────────
+        L.addWidget(_sec("Sistem"))
+        sys_row = QHBoxLayout(); sys_row.setSpacing(4)
+        self.btn_start    = QPushButton("BAŞLAT")
+        self.btn_stop     = QPushButton("DURDUR")
+        self.btn_reset_sys = QPushButton("RESET")
+        for btn in [self.btn_start, self.btn_stop, self.btn_reset_sys]:
+            btn.setFixedHeight(36)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            sys_row.addWidget(btn)
+        self.btn_start.setStyleSheet(Styles.BUTTON_SUCCESS + "QPushButton{font-size:13px;font-weight:700;}")
+        self.btn_stop.setStyleSheet(Styles.BUTTON_NORMAL + "QPushButton{font-size:13px;font-weight:700;}")
+        self.btn_reset_sys.setStyleSheet(Styles.BUTTON_DANGER + "QPushButton{font-size:13px;font-weight:700;}")
+        self.btn_stop.setEnabled(False)
+        L.addLayout(sys_row)
+        L.addWidget(_sep())
+
+        # ── Çalışma Modu ──────────────────────────────────────────────
+        L.addWidget(_sec("Çalışma Modu"))
+
+        # Ana mod: MANUEL | OTONOM
         self.mode_group = QButtonGroup(self)
-        
-        self.btn_manual = QPushButton("MANUEL")
-        self.btn_manual.setCheckable(True)
-        self.btn_manual.setChecked(True)
-        self.btn_manual.setStyleSheet(Styles.BUTTON_MODE)
-        self.btn_manual.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_manual.setFixedHeight(30)
-        
-        self.btn_semi = QPushButton("YARI OTO")
-        self.btn_semi.setCheckable(True)
-        self.btn_semi.setStyleSheet(Styles.BUTTON_MODE)
-        self.btn_semi.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_semi.setFixedHeight(30)
-        
-        self.btn_auto = QPushButton("TAM OTO")
-        self.btn_auto.setCheckable(True)
-        self.btn_auto.setStyleSheet(Styles.BUTTON_MODE)
-        self.btn_auto.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.btn_auto.setFixedHeight(30)
-        
-        self.mode_group.addButton(self.btn_manual, 0)
-        self.mode_group.addButton(self.btn_semi, 1)
-        self.mode_group.addButton(self.btn_auto, 2)
-        
-        mode_layout.addWidget(self.btn_manual)
-        mode_layout.addWidget(self.btn_semi)
-        mode_layout.addWidget(self.btn_auto)
-        layout.addWidget(mode_group)
-        
-        # Servo kontrol
-        servo_group = QGroupBox("Servo Kontrol")
-        servo_group.setStyleSheet(Styles.GROUP_BOX)
-        servo_layout = QVBoxLayout(servo_group)
-        servo_layout.setContentsMargins(6, 4, 6, 6)
-        servo_layout.setSpacing(4)
-        
+        mode_row = QHBoxLayout(); mode_row.setSpacing(4)
+        self.btn_manuel = QPushButton("MANUEL")
+        self.btn_otonom = QPushButton("OTONOM")
+        for i, btn in enumerate([self.btn_manuel, self.btn_otonom]):
+            btn.setCheckable(True)
+            btn.setStyleSheet(Styles.BUTTON_MODE)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setFixedHeight(34)
+            mode_row.addWidget(btn)
+            self.mode_group.addButton(btn, i)
+        self.btn_manuel.setChecked(True)
+        L.addLayout(mode_row)
+
+        # Otonom alt modlar: 2. AŞAMA | 3. AŞAMA (başta gizli)
+        self.otonom_sub_group = QButtonGroup(self)
+        self.otonom_sub_row = QHBoxLayout(); self.otonom_sub_row.setSpacing(4)
+        self.btn_asama2 = QPushButton("2. AŞAMA")
+        self.btn_asama3 = QPushButton("3. AŞAMA")
+        for i, btn in enumerate([self.btn_asama2, self.btn_asama3]):
+            btn.setCheckable(True)
+            btn.setStyleSheet(Styles.BUTTON_MODE)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            btn.setFixedHeight(28)
+            self.otonom_sub_row.addWidget(btn)
+            self.otonom_sub_group.addButton(btn, i)
+        self.btn_asama2.setChecked(True)
+
+        # Sub row'u bir widget'a sar ki gizleyebilelim
+        self.otonom_sub_widget = QWidget()
+        self.otonom_sub_widget.setStyleSheet("background:transparent;")
+        self.otonom_sub_widget.setLayout(self.otonom_sub_row)
+        self.otonom_sub_widget.setVisible(False)  # Başta gizli
+        L.addWidget(self.otonom_sub_widget)
+        L.addWidget(_sep())
+
+        # ── Servo Kontrol ─────────────────────────────────────────────
+        L.addWidget(_sec("Servo Kontrol"))
         self.servo_control = ServoControlWidget()
-        servo_layout.addWidget(self.servo_control)
-        
-        # Sıfırla butonu
+        L.addWidget(self.servo_control)
         self.btn_reset = QPushButton("SIFIRLA")
         self.btn_reset.setStyleSheet(Styles.BUTTON_NORMAL)
-        self.btn_reset.setFixedHeight(30)
-        servo_layout.addWidget(self.btn_reset)
-        
-        layout.addWidget(servo_group)
-        
-        # Ateş kontrolü
-        fire_group = QGroupBox("Ateş Kontrolü")
-        fire_group.setStyleSheet(Styles.GROUP_BOX)
-        fire_layout = QVBoxLayout(fire_group)
-        fire_layout.setContentsMargins(6, 4, 6, 6)
-        fire_layout.setSpacing(4)
+        self.btn_reset.setFixedHeight(28)
+        L.addWidget(self.btn_reset)
+        L.addWidget(_sep())
 
-        # Güvenlik kilidi
+        # ── Ateş — stretch ile alta yasla ────────────────────────────
+        L.addStretch(1)
+        L.addWidget(_sec("Ateş Kontrolü"))
         self.btn_unlock = QPushButton("KİLİDİ AÇ")
-        self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL)
         self.btn_unlock.setCheckable(True)
-        self.btn_unlock.setFixedHeight(32)
-        fire_layout.addWidget(self.btn_unlock)
-        
-        # Ateş butonu
+        self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL + "QPushButton{font-size:13px;font-weight:600;}")
+        self.btn_unlock.setFixedHeight(34)
+        L.addWidget(self.btn_unlock)
+
         self.btn_fire = QPushButton("ATEŞ")
         self.btn_fire.setStyleSheet(Styles.BUTTON_DANGER)
-        self.btn_fire.setEnabled(False)  # Varsayılan: devre dışı
-        self.btn_fire.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        self.btn_fire.setMinimumHeight(40)
-        fire_layout.addWidget(self.btn_fire)
-        
-        layout.addWidget(fire_group, stretch=1)
-        
-        # Signal bağlantıları
+        self.btn_fire.setEnabled(False)
+        self.btn_fire.setFixedHeight(52)
+        self.btn_fire.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        L.addWidget(self.btn_fire)
+
+        # Bağlantılar
+        self.btn_start.clicked.connect(self._on_start)
+        self.btn_stop.clicked.connect(self._on_stop)
+        self.btn_reset_sys.clicked.connect(self._on_reset_sys)
         self.mode_group.buttonClicked.connect(self._on_mode_changed)
-        self.servo_control.servo_changed.connect(self._on_servo_changed)
-        self.btn_reset.clicked.connect(self._on_reset_clicked)
+        self.otonom_sub_group.buttonClicked.connect(self._on_sub_mode_changed)
+        self.servo_control.servo_changed.connect(lambda x,y: self.servo_command.emit(x,y))
+        self.btn_reset.clicked.connect(self.servo_control.reset_position)
         self.btn_unlock.toggled.connect(self._on_unlock_toggled)
         self.btn_fire.clicked.connect(self._on_fire_clicked)
 
-    def _on_mode_changed(self, button):
-        mode_id = self.mode_group.id(button)
-        mode_map = {
-            0: "MANUEL",
-            1: "YARI_OTONOM",
-            2: "TAM_OTONOM",
-        }
-        mode = mode_map.get(mode_id, "MANUEL")
-        
-        # Servo kontrolü sadece manuel modda aktif
-        self.servo_control.setEnabled(mode == "MANUEL")
-        
-        self.mode_changed.emit(mode)
-    
-    def _on_servo_changed(self, x: int, y: int):
-        """Servo değerleri değiştiğinde"""
-        self.servo_command.emit(x, y)
-    
-    def _on_reset_clicked(self):
-        """Servo pozisyonunu sıfırla"""
+        # Başlangıçta servo aktif (Manuel mod)
+        self.servo_control.setEnabled(True)
+
+    # ── Sistem ────────────────────────────────────────────────────────
+    def _on_start(self):
+        self.btn_start.setEnabled(False); self.btn_stop.setEnabled(True)
+        self.system_start.emit()
+
+    def _on_stop(self):
+        self.btn_start.setEnabled(True); self.btn_stop.setEnabled(False)
+        self.btn_unlock.setChecked(False)
+        self.system_stop.emit()
+
+    def _on_reset_sys(self):
+        self._on_stop()
         self.servo_control.reset_position()
-    
-    def _on_unlock_toggled(self, checked: bool):
-        """Güvenlik kilidi değiştiğinde"""
+        self.btn_manuel.setChecked(True)
+        self.otonom_sub_widget.setVisible(False)
+        self.servo_control.setEnabled(True)
+        self.system_reset.emit()
+
+    # ── Mod ───────────────────────────────────────────────────────────
+    def _on_mode_changed(self, button):
+        is_otonom = self.mode_group.id(button) == 1
+        self.otonom_sub_widget.setVisible(is_otonom)
+        self.servo_control.setEnabled(not is_otonom)
+        if is_otonom:
+            # Hangi alt aşama seçili?
+            sub_id = self.otonom_sub_group.checkedId()
+            mode = "ASAMA_3" if sub_id == 1 else "ASAMA_2"
+        else:
+            mode = "MANUEL"
+        self.mode_changed.emit(mode)
+
+    def _on_sub_mode_changed(self, button):
+        sub_id = self.otonom_sub_group.id(button)
+        mode = "ASAMA_3" if sub_id == 1 else "ASAMA_2"
+        self.mode_changed.emit(mode)
+
+    # ── Kilit / Ateş ──────────────────────────────────────────────────
+    def _on_unlock_toggled(self, checked):
         self._fire_unlocked = checked
-        self.btn_fire.setEnabled(checked)
-        
         if checked:
-            self.btn_unlock.setText("KİLİT AÇIK")
+            self.btn_unlock.setText("KİLİT AÇIK ✓")
             self.btn_unlock.setStyleSheet(Styles.BUTTON_SUCCESS)
+            if self._is_friendly_target is not True:
+                self.btn_fire.setEnabled(True)
         else:
             self.btn_unlock.setText("KİLİDİ AÇ")
-            self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL)
-    
+            self.btn_unlock.setStyleSheet(Styles.BUTTON_NORMAL + "QPushButton{font-size:13px;font-weight:600;}")
+            self.btn_fire.setEnabled(False)
+
     def _on_fire_clicked(self):
-        """
-        Ateş butonuna basıldığında
-        
-        GÜVENLİK: 
-        - Sadece kilit açıksa çalışır
-        - DOST hedeflere ateş edilmez
-        """
-        if self._emergency_active:
-            return
-        
-        # DOST hedef kontrolü (3. Aşama Şartnamesi)
-        if self._is_friendly_target is True:
-            # DOST hedef - Ateş engellendi
-            return
-        
+        if self._emergency_active or self._is_friendly_target is True: return
         if self._fire_unlocked:
             self.fire_command.emit()
-            
-            # Ateşten sonra kilidi otomatik kapat (güvenlik)
             self.btn_unlock.setChecked(False)
-    
+
+    # ── Dışarıdan ─────────────────────────────────────────────────────
     @Slot(str)
-    def set_mode(self, mode: str):
-        """Modu dışarıdan ayarla"""
-        mode_map = {
-            "MANUEL": self.btn_manual,
-            "YARI_OTONOM": self.btn_semi,
-            "TAM_OTONOM": self.btn_auto
-        }
-        btn = mode_map.get(mode.upper())
-        if btn:
-            btn.setChecked(True)
-    
+    def set_mode(self, mode):
+        m = mode.upper()
+        if m == "MANUEL":
+            self.btn_manuel.setChecked(True)
+            self.otonom_sub_widget.setVisible(False)
+            self.servo_control.setEnabled(True)
+        elif m in ("ASAMA_2", "ASAMA_3"):
+            self.btn_otonom.setChecked(True)
+            self.otonom_sub_widget.setVisible(True)
+            self.servo_control.setEnabled(False)
+            if m == "ASAMA_2": self.btn_asama2.setChecked(True)
+            else:               self.btn_asama3.setChecked(True)
+
     @Slot(bool)
-    def set_friendly_target(self, is_friendly: bool):
-        """
-        Hedef IFF durumunu güncelle ve ateş kontrolü yap
-        
-        Args:
-            is_friendly: True=DOST (Ateş kilidi), False=DÜŞMAN (Ateş serbest)
-        """
-        self._is_friendly_target = is_friendly
-        
-        if is_friendly:
-            # DOST hedef - Ateş butonunu kapat ve görsel uyarı
+    def set_friendly_target(self, friendly):
+        self._is_friendly_target = friendly
+        if friendly:
             self.btn_fire.setEnabled(False)
             self.btn_fire.setText("🛡️ DOST HEDEF")
             self.btn_unlock.setEnabled(False)
             self.btn_unlock.setChecked(False)
         else:
-            # DÜŞMAN hedef - Normal ateş kontrolü
             self.btn_fire.setText("ATEŞ")
             self.btn_unlock.setEnabled(not self._emergency_active)
-            # Ateş butonu sadece kilit açıksa aktif
             if self._fire_unlocked and not self._emergency_active:
                 self.btn_fire.setEnabled(True)
-    
+
     @Slot()
     def clear_target_lock(self):
-        """Hedef kilidini temizle"""
         self._is_friendly_target = None
         self.btn_fire.setText("ATEŞ")
         if not self._emergency_active:
