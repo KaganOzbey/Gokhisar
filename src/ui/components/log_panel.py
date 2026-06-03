@@ -42,8 +42,8 @@ class LogPanel(QFrame):
         self.setStyleSheet(Styles.PANEL)
         
         layout = QVBoxLayout(self)
-        layout.setSpacing(6)
-        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(4)
+        layout.setContentsMargins(8, 5, 8, 5)
         
         # Başlık ve kontroller
         header_layout = QHBoxLayout()
@@ -65,7 +65,7 @@ class LogPanel(QFrame):
         self.log_text = QTextEdit()
         self.log_text.setStyleSheet(Styles.LOG_AREA)
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(80)
+        self.log_text.setMinimumHeight(50)
         layout.addWidget(self.log_text)
         
         # Signal bağlantıları
