@@ -1,414 +1,284 @@
-"""
-Durum Paneli Bileşeni
-
-Bağlantı durumu, mod bilgisi ve sistem uyarılarını gösteren panel.
-Modüler yapıda - ana pencereye widget olarak eklenir.
-"""
-
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame, QGroupBox
+    QVBoxLayout, QHBoxLayout, QLabel, QFrame, QSizePolicy
 )
 from PySide6.QtCore import Qt, Slot
 
-from src.ui.styles import Styles
+
+def _sep():
+    f = QFrame()
+    f.setFrameShape(QFrame.HLine)
+    f.setStyleSheet("background: rgba(0,212,255,0.2); border: none;")
+    f.setFixedHeight(1)
+    return f
 
 
-class StatusIndicator(QLabel):
-    """
-    Tek bir durum göstergesi (LED benzeri)
-    
-    Kullanım:
-        indicator = StatusIndicator("Bağlantı")
-        indicator.set_status(True)  # Yeşil
-        indicator.set_status(False) # Kırmızı
-    """
-    
-    def __init__(self, label_text: str, parent=None):
+def _sec(text):
+    l = QLabel(text)
+    l.setStyleSheet(
+        "font-family: Arial; font-size: 13px; font-weight: 700; "
+        "color: #00d4ff; background: transparent; padding: 3px 0px;"
+    )
+    l.setFixedHeight(22)
+    return l
+
+
+S_OK   = ("background: rgba(52,211,153,0.1); color: #e6eaf2; "
+          "font-size: 13px; font-weight: 600; padding: 6px 10px; "
+          "border: 1px solid rgba(52,211,153,0.4); border-radius: 6px;")
+S_WARN = ("background: rgba(255,77,77,0.1); color: #e6eaf2; "
+          "font-size: 13px; font-weight: 600; padding: 6px 10px; "
+          "border: 1px solid rgba(255,77,77,0.4); border-radius: 6px;")
+S_CAUT = ("background: rgba(251,146,60,0.1); color: #e6eaf2; "
+          "font-size: 13px; font-weight: 600; padding: 6px 10px; "
+          "border: 1px solid rgba(251,146,60,0.4); border-radius: 6px;")
+IFF_F  = ("background: rgba(16,185,129,0.2); color: #00DD88; "
+          "font-size: 13px; font-weight: 700; padding: 6px 10px; "
+          "border: 1px solid rgba(0,220,136,0.5); border-radius: 6px;")
+IFF_H  = ("background: rgba(239,68,68,0.2); color: #FF4444; "
+          "font-size: 13px; font-weight: 700; padding: 6px 10px; "
+          "border: 1px solid rgba(255,68,68,0.5); border-radius: 6px;")
+
+
+class StatusIndicator(QFrame):
+    def __init__(self, label_text, parent=None):
         super().__init__(parent)
-        self._label_text = label_text
         self._is_ok = False
-        self.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-        self.setMinimumHeight(24)
-        self._update_display()
-    
-    def _update_display(self):
-        """Görünümü duruma göre güncelle"""
-        if self._is_ok:
-            icon = "●"
-            status_text = "ONLINE"
+        self.setFixedHeight(36)
+        self.setStyleSheet(
+            "QFrame { background: rgba(255,77,77,0.07); "
+            "border: 1px solid rgba(255,77,77,0.25); border-radius: 6px; }"
+        )
+        row = QHBoxLayout(self)
+        row.setContentsMargins(10, 0, 10, 0)
+        row.setSpacing(8)
+
+        self._icon = QLabel("○")
+        self._icon.setFixedWidth(16)
+        self._icon.setAlignment(Qt.AlignCenter)
+        self._icon.setStyleSheet("font-size: 12px; color: #ff4d4d; background: transparent; border: none;")
+        row.addWidget(self._icon)
+
+        self._name = QLabel(label_text)
+        self._name.setStyleSheet("font-family: Arial; font-size: 13px; font-weight: 600; color: #c8cdd6; background: transparent; border: none;")
+        row.addWidget(self._name, stretch=1)
+
+        self._status = QLabel("OFFLINE")
+        self._status.setFixedWidth(58)
+        self._status.setAlignment(Qt.AlignCenter)
+        self._status.setStyleSheet("font-size: 11px; font-weight: 700; color: #ff4d4d; background: transparent; border: none;")
+        row.addWidget(self._status)
+
+    def set_status(self, ok: bool):
+        self._is_ok = ok
+        if ok:
+            self._icon.setText("●")
+            self._icon.setStyleSheet("font-size: 12px; color: #34d399; background: transparent; border: none;")
+            self._status.setText("ONLINE")
+            self._status.setStyleSheet("font-size: 11px; font-weight: 700; color: #34d399; background: transparent; border: none;")
+            self.setStyleSheet(
+                "QFrame { background: rgba(52,211,153,0.07); "
+                "border: 1px solid rgba(52,211,153,0.3); border-radius: 6px; }"
+            )
         else:
-            icon = "○"
-            status_text = "OFFLINE"
-        self.setText(f"{icon}  {self._label_text}: {status_text}")
-        
-        if self._is_ok:
-            self.setStyleSheet(Styles.STATUS_LABEL_OK)
-        else:
-            self.setStyleSheet(Styles.STATUS_LABEL_WARNING)
-    
-    @Slot(bool)
-    def set_status(self, is_ok: bool):
-        """
-        Durumu güncelle
-        
-        Bu bir Slot - Signal'dan çağrılabilir
-        Örnek: worker.connection_status.connect(indicator.set_status)
-        """
-        self._is_ok = is_ok
-        self._update_display()
+            self._icon.setText("○")
+            self._icon.setStyleSheet("font-size: 12px; color: #ff4d4d; background: transparent; border: none;")
+            self._status.setText("OFFLINE")
+            self._status.setStyleSheet("font-size: 11px; font-weight: 700; color: #ff4d4d; background: transparent; border: none;")
+            self.setStyleSheet(
+                "QFrame { background: rgba(255,77,77,0.07); "
+                "border: 1px solid rgba(255,77,77,0.25); border-radius: 6px; }"
+            )
 
 
 class StatusPanel(QFrame):
-    """
-    Sistem durum paneli
-    
-    İçerik:
-    - TCP bağlantı durumu
-    - UDP video durumu  
-    - Aktif mod gösterimi
-    - Kritik bölge uyarısı
-    """
-    
     def __init__(self, parent=None):
         super().__init__(parent)
-        self._setup_ui()
-    
-    def _setup_ui(self):
-        """UI bileşenlerini oluştur"""
-        self.setStyleSheet(Styles.PANEL)
-        self.setMinimumWidth(280)
-        
-        layout = QVBoxLayout(self)
-        layout.setSpacing(8)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        # Başlık
+        self.setStyleSheet(
+            "QFrame { background: rgba(6,20,42,0.98); "
+            "border: 1px solid rgba(0,212,255,0.15); border-radius: 14px; }"
+        )
+        self.setFixedWidth(272)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+
+        L = QVBoxLayout(self)
+        L.setSpacing(7)
+        L.setContentsMargins(12, 14, 12, 14)
+
+        # Baslik
         title = QLabel("SİSTEM DURUMU")
-        title.setStyleSheet(Styles.TITLE_LABEL)
         title.setAlignment(Qt.AlignCenter)
-        layout.addWidget(title)
-        
-        # Bağlantı durumları
-        connection_group = QGroupBox("Bağlantı")
-        connection_group.setStyleSheet(Styles.GROUP_BOX)
-        conn_layout = QVBoxLayout(connection_group)
-        conn_layout.setContentsMargins(8, 6, 8, 8)
-        conn_layout.setSpacing(4)
-        
+        title.setStyleSheet(
+            "font-family: Arial; font-size: 20px; font-weight: 800; color: #ffffff; "
+            "background: transparent; padding: 6px 0px;"
+        )
+        L.addWidget(title)
+        L.addWidget(_sep())
+
+        # Bağlantı
+        L.addWidget(_sec("Bağlantı"))
         self.tcp_indicator = StatusIndicator("TCP Kontrol")
         self.udp_indicator = StatusIndicator("UDP Video")
-        
-        conn_layout.addWidget(self.tcp_indicator)
-        conn_layout.addWidget(self.udp_indicator)
-        layout.addWidget(connection_group)
-        
-        # Mod durumu
-        mode_group = QGroupBox("Çalışma Modu")
-        mode_group.setStyleSheet(Styles.GROUP_BOX)
-        mode_layout = QVBoxLayout(mode_group)
-        mode_layout.setContentsMargins(8, 6, 8, 8)
-        mode_layout.setSpacing(4)
-        
+        L.addWidget(self.tcp_indicator)
+        L.addWidget(self.udp_indicator)
+        L.addWidget(_sep())
+
+        # Çalışma Modu
+        L.addWidget(_sec("Çalışma Modu"))
         self.mode_label = QLabel("MANUEL")
-        self.mode_label.setStyleSheet(Styles.STATUS_LABEL_OK)
         self.mode_label.setAlignment(Qt.AlignCenter)
-        self.mode_label.setFixedHeight(30)
-        mode_layout.addWidget(self.mode_label)
-        layout.addWidget(mode_group)
-        
-        # Hedef durumu
-        target_group = QGroupBox("Hedef Bilgisi")
-        target_group.setStyleSheet(Styles.GROUP_BOX)
-        target_layout = QVBoxLayout(target_group)
-        target_layout.setContentsMargins(8, 6, 8, 8)
-        target_layout.setSpacing(4)
-        
+        self.mode_label.setFixedHeight(34)
+        self.mode_label.setStyleSheet(S_OK)
+        L.addWidget(self.mode_label)
+        L.addWidget(_sep())
+
+        # Hedef Bilgisi
+        L.addWidget(_sec("Hedef Bilgisi"))
         self.target_label = QLabel("HEDEF YOK")
-        self.target_label.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
         self.target_label.setAlignment(Qt.AlignCenter)
-        self.target_label.setFixedHeight(30)
-        target_layout.addWidget(self.target_label)
-        
-        # Hedef sınıfı ve ikon (yatay layout)
-        class_layout = QHBoxLayout()
-        class_layout.setSpacing(6)
-        
-        self.target_icon = QLabel("●")  # Varsayılan ikon
-        self.target_icon.setStyleSheet("color: #4f83ff; font-size: 18px;")
-        self.target_icon.setFixedWidth(24)
-        class_layout.addWidget(self.target_icon)
-        
-        self.target_type_label = QLabel("Tür: -")
-        self.target_type_label.setStyleSheet(Styles.TARGET_CLASS_LABEL)
-        class_layout.addWidget(self.target_type_label, stretch=1)
-        
-        target_layout.addLayout(class_layout)
-        
-        # IFF (Dost/Düşman) Badge
+        self.target_label.setFixedHeight(34)
+        self.target_label.setStyleSheet(S_CAUT)
+        L.addWidget(self.target_label)
+
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        self.target_icon = QLabel("●")
+        self.target_icon.setStyleSheet("color: #00d4ff; font-size: 16px; background: transparent; border: none;")
+        self.target_icon.setFixedWidth(20)
+        self.target_icon.setAlignment(Qt.AlignCenter)
+        row.addWidget(self.target_icon)
+        self.target_type_label = QLabel("Tür: —")
+        self.target_type_label.setStyleSheet(
+            "font-size: 13px; font-weight: 600; color: #e6eaf2; "
+            "background: rgba(0,212,255,0.08); padding: 5px 8px; border-radius: 5px;"
+        )
+        row.addWidget(self.target_type_label, stretch=1)
+        L.addLayout(row)
+
         self.iff_badge = QLabel("BİLİNMİYOR")
-        self.iff_badge.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
         self.iff_badge.setAlignment(Qt.AlignCenter)
-        self.iff_badge.setFixedHeight(32)
-        target_layout.addWidget(self.iff_badge)
-        
-        layout.addWidget(target_group)
-        
-        # Menzil durumu
-        range_group = QGroupBox("Menzil Durumu")
-        range_group.setStyleSheet(Styles.GROUP_BOX)
-        range_layout = QVBoxLayout(range_group)
-        range_layout.setContentsMargins(8, 6, 8, 8)
-        range_layout.setSpacing(6)
-        
-        # Mesafe göstergesi
-        self.distance_label = QLabel("Mesafe: - km")
-        self.distance_label.setStyleSheet("""
-            QLabel {
-                color: #00ff00;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 8px;
-                background-color: #1a1a2e;
-                border: 1px solid #333;
-                border-radius: 4px;
-            }
-        """)
+        self.iff_badge.setFixedHeight(34)
+        self.iff_badge.setStyleSheet(S_CAUT)
+        L.addWidget(self.iff_badge)
+        L.addWidget(_sep())
+
+        # Menzil
+        L.addWidget(_sec("Menzil Durumu"))
+        self.distance_label = QLabel("Mesafe: -")
         self.distance_label.setAlignment(Qt.AlignCenter)
-        range_layout.addWidget(self.distance_label)
-        
-        # Menzil bantları (5m, 10m, 15m)
-        bands_layout = QHBoxLayout()
-        bands_layout.setSpacing(4)
-        
-        self.range_5m = QLabel("5m")
+        self.distance_label.setFixedHeight(36)
+        self.distance_label.setStyleSheet(
+            "color: #34d399; font-size: 15px; font-weight: bold; "
+            "background: rgba(0,0,0,0.4); border: 1px solid rgba(52,211,153,0.2); "
+            "border-radius: 6px; padding: 4px;"
+        )
+        L.addWidget(self.distance_label)
+
+        bands = QHBoxLayout()
+        bands.setSpacing(4)
+        bs = ("color: #666; background: rgba(40,40,60,0.9); border: 1px solid #2a3a50; "
+              "border-radius: 4px; font-size: 11px; font-weight: 600; padding: 3px 4px;")
+        self.range_5m  = QLabel("5m")
         self.range_10m = QLabel("10m")
         self.range_15m = QLabel("15m")
-        
-        for label in [self.range_5m, self.range_10m, self.range_15m]:
-            label.setAlignment(Qt.AlignCenter)
-            label.setFixedHeight(28)
-            label.setStyleSheet("""
-                QLabel {
-                    color: #888;
-                    background-color: #2a2a3e;
-                    border: 1px solid #444;
-                    border-radius: 3px;
-                    font-size: 11px;
-                    padding: 2px 8px;
-                }
-            """)
-            bands_layout.addWidget(label)
-        
-        range_layout.addLayout(bands_layout)
-        
-        # Menzil durumu etiketi
+        for lbl in [self.range_5m, self.range_10m, self.range_15m]:
+            lbl.setAlignment(Qt.AlignCenter)
+            lbl.setFixedHeight(22)
+            lbl.setStyleSheet(bs)
+            bands.addWidget(lbl)
+        L.addLayout(bands)
+
         self.range_status_label = QLabel("Bekleniyor...")
-        self.range_status_label.setStyleSheet(Styles.SUBTITLE_LABEL)
         self.range_status_label.setAlignment(Qt.AlignCenter)
-        range_layout.addWidget(self.range_status_label)
-        
-        layout.addWidget(range_group)
-        
-        # Kritik bölge uyarısı
-        self.critical_warning = QLabel("⚠ KRİTİK BÖLGE")
-        self.critical_warning.setStyleSheet(Styles.STATUS_LABEL_WARNING)
+        self.range_status_label.setStyleSheet("color: #9aa4b2; font-size: 11px; background: transparent;")
+        L.addWidget(self.range_status_label)
+
+        self.critical_warning = QLabel("KRİTİK BÖLGE")
         self.critical_warning.setAlignment(Qt.AlignCenter)
-        self.critical_warning.setVisible(False)  # Varsayılan: gizli
-        layout.addWidget(self.critical_warning)
-        
-        layout.addStretch()
-    
+        self.critical_warning.setStyleSheet(S_WARN)
+        self.critical_warning.setVisible(False)
+        L.addWidget(self.critical_warning)
+
     @Slot(str)
-    def set_mode(self, mode: str):
-        """Aktif modu güncelle"""
-        self.mode_label.setText(mode.upper())
-    
+    def set_mode(self, mode):
+        d = {"MANUEL": "MANUEL", "ASAMA_2": "2. AŞAMA", "ASAMA_3": "3. AŞAMA"}
+        self.mode_label.setText(d.get(mode.upper(), mode.upper()))
+
     @Slot(bool)
-    def set_tcp_status(self, connected: bool):
-        """TCP bağlantı durumunu güncelle"""
-        self.tcp_indicator.set_status(connected)
-    
+    def set_tcp_status(self, v): self.tcp_indicator.set_status(v)
+
     @Slot(bool)
-    def set_udp_status(self, connected: bool):
-        """UDP bağlantı durumunu güncelle"""
-        self.udp_indicator.set_status(connected)
-    
+    def set_udp_status(self, v): self.udp_indicator.set_status(v)
+
     @Slot(str, str)
-    def set_target_info(self, status: str, target_type: str = ""):
-        """Hedef bilgisini güncelle"""
+    def set_target_info(self, status, target_type=""):
         self.target_label.setText(status)
-        self.target_type_label.setText(f"Tür: {target_type}" if target_type else "Tür: -")
-        
-        # Hedef tipine göre ikon seçimi
-        icon_map = {
-            "Balistik Füze": "↑",
-            "İHA": "✈",
-            "Helikopter": "🚁",
-            "Savaş Uçağı": "✈",
-            "Mini/Micro İHA": "⚡",
-        }
-        
-        icon = icon_map.get(target_type, "●")
-        self.target_icon.setText(icon)
-        
-        # Düşman hedefinde kırmızı, dost hedefinde yeşil
-        if "DÜŞMAN" in target_type.upper():
-            self.target_label.setStyleSheet(Styles.STATUS_LABEL_WARNING)
-        elif "DOST" in target_type.upper():
-            self.target_label.setStyleSheet(Styles.STATUS_LABEL_OK)
-        else:
-            self.target_label.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
-    
+        self.target_type_label.setText(f"Tur: {target_type}" if target_type else "Tür: —")
+        icons = {"Balistik Fuze": "↑", "IHA": "✈", "Helikopter": "🚁", "Savas Ucagi": "✈", "Mini/Micro IHA": "⚡"}
+        self.target_icon.setText(icons.get(target_type, "●"))
+        if "DÜŞMAN" in target_type.upper(): self.target_label.setStyleSheet(S_WARN)
+        elif "DOST" in target_type.upper(): self.target_label.setStyleSheet(S_OK)
+        else: self.target_label.setStyleSheet(S_CAUT)
+
     @Slot(str, bool)
-    def set_target_classification(self, target_class: str, is_friendly: bool):
-        """
-        Hedef sınıflandırma ve IFF bilgisini güncelle
-        
-        Args:
-            target_class: "Balistik Füze", "İHA", "Helikopter", vb.
-            is_friendly: True=DOST, False=DÜŞMAN
-        """
-        # Hedef durumu güncelle
+    def set_target_classification(self, cls, friendly):
         self.target_label.setText("HEDEF TESPİT")
-        
-        # Sınıf bilgisi
-        self.target_type_label.setText(f"Tür: {target_class}")
-        
-        # İkon seçimi
-        icon_map = {
-            "Balistik Füze": "↑",
-            "İHA": "✈",
-            "Helikopter": "🚁",
-            "Savaş Uçağı": "✈",
-            "Mini/Micro İHA": "⚡",
-        }
-        icon = icon_map.get(target_class, "●")
-        self.target_icon.setText(icon)
-        
-        # IFF Badge güncelleme
-        if is_friendly:
-            self.iff_badge.setText("✓ DOST")
-            self.iff_badge.setStyleSheet(Styles.IFF_BADGE_FRIENDLY)
-            self.target_label.setStyleSheet(Styles.STATUS_LABEL_OK)
-        else:
-            self.iff_badge.setText("✕ DÜŞMAN")
-            self.iff_badge.setStyleSheet(Styles.IFF_BADGE_HOSTILE)
-            self.target_label.setStyleSheet(Styles.STATUS_LABEL_WARNING)
-    
+        self.target_label.setStyleSheet(S_OK if friendly else S_WARN)
+        self.target_type_label.setText(f"Tur: {cls}")
+        self.iff_badge.setText("DOST" if friendly else "DÜŞMAN")
+        self.iff_badge.setStyleSheet(IFF_F if friendly else IFF_H)
+
     @Slot()
     def clear_target_info(self):
-        """Hedef bilgilerini temizle"""
         self.target_label.setText("HEDEF YOK")
-        self.target_label.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
-        self.target_type_label.setText("Tür: -")
+        self.target_label.setStyleSheet(S_CAUT)
+        self.target_type_label.setText("Tür: —")
         self.target_icon.setText("●")
         self.iff_badge.setText("BİLİNMİYOR")
-        self.iff_badge.setStyleSheet(Styles.STATUS_LABEL_CAUTION)
-    
+        self.iff_badge.setStyleSheet(S_CAUT)
+
     @Slot(bool)
-    def set_critical_zone_warning(self, is_critical: bool):
-        """Kritik bölge uyarısını göster/gizle"""
-        self.critical_warning.setVisible(is_critical)
-    
+    def set_critical_zone_warning(self, v): self.critical_warning.setVisible(v)
+
     @Slot(float)
-    def set_target_distance(self, distance_m: float):
-        """
-        Hedef mesafesini güncelle
-        
-        Args:
-            distance_m: Mesafe (metre cinsinden)
-        """
-        distance_m = distance_m  # Zaten metre cinsinden
-        self.distance_label.setText(f"Mesafe: {distance_m:.1f} m")
-        
-        # Menzil bantlarını güncelle
-        self._update_range_bands(distance_m)
-        
-        # Menzil durumunu güncelle
-        if distance_m <= 5:
-            self.range_status_label.setText("✅ YAKIN MENZİL - Angajman Öncelikli")
-            self.range_status_label.setStyleSheet("color: #00ff00; font-weight: bold;")
-            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#00ff00", "#ff0000"))
-        elif distance_m <= 10:
-            self.range_status_label.setText("⚠️ ORTA MENZİL - Takipte")
-            self.range_status_label.setStyleSheet("color: #ffaa00; font-weight: bold;")
-            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ff0000", "#ffaa00").replace("#00ff00", "#ffaa00"))
-        elif distance_m <= 15:
-            self.range_status_label.setText("🟡 UZAK MENZİL - İzleniyor")
-            self.range_status_label.setStyleSheet("color: #ffff00;")
-            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ffaa00", "#ffff00").replace("#ff0000", "#ffff00"))
+    def set_target_distance(self, d):
+        self.distance_label.setText(f"Mesafe: {d:.1f} m")
+        self._bands(d)
+        if d <= 5:
+            self.range_status_label.setText("YAKIN — Angajman")
+            self.range_status_label.setStyleSheet("color: #ff4444; font-size: 11px; font-weight: bold; background: transparent;")
+        elif d <= 10:
+            self.range_status_label.setText("ORTA — Takipte")
+            self.range_status_label.setStyleSheet("color: #ff8800; font-size: 11px; font-weight: bold; background: transparent;")
+        elif d <= 15:
+            self.range_status_label.setText("UZAK — İzleniyor")
+            self.range_status_label.setStyleSheet("color: #ffcc00; font-size: 11px; background: transparent;")
         else:
-            self.range_status_label.setText("⚪ MENZİL DIŞI")
-            self.range_status_label.setStyleSheet("color: #888;")
-            self.distance_label.setStyleSheet(self.distance_label.styleSheet().replace("#ffff00", "#888").replace("#ffaa00", "#888").replace("#ff0000", "#888"))
-    
-    def _update_range_bands(self, distance_m: float):
-        """Menzil bantlarını görsel olarak güncelle"""
-        # Aktif bantı vurgula
-        active_style = """
-            QLabel {
-                color: #fff;
-                background-color: #ff4444;
-                border: 2px solid #ff0000;
-                border-radius: 3px;
-                font-size: 11px;
-                font-weight: bold;
-                padding: 2px 8px;
-            }
-        """
-        inactive_style = """
-            QLabel {
-                color: #888;
-                background-color: #2a2a3e;
-                border: 1px solid #444;
-                border-radius: 3px;
-                font-size: 11px;
-                padding: 2px 8px;
-            }
-        """
-        
-        # Tüm bantları sıfırla
-        self.range_5m.setStyleSheet(inactive_style)
-        self.range_10m.setStyleSheet(inactive_style)
-        self.range_15m.setStyleSheet(inactive_style)
-        
-        # Aktif bantı vurgula
-        if distance_m <= 5:
-            self.range_5m.setStyleSheet(active_style)
-        elif distance_m <= 10:
-            self.range_10m.setStyleSheet(active_style.replace("#ff4444", "#ff8800").replace("#ff0000", "#ff6600"))
-        elif distance_m <= 15:
-            self.range_15m.setStyleSheet(active_style.replace("#ff4444", "#ffcc00").replace("#ff0000", "#ffaa00"))
-    
+            self.range_status_label.setText("Menzil Dışı")
+            self.range_status_label.setStyleSheet("color: #555; font-size: 11px; background: transparent;")
+
+    def _bands(self, d):
+        i = "color: #666; background: rgba(40,40,60,0.9); border: 1px solid #2a3a50; border-radius: 4px; font-size: 11px; padding: 3px 4px;"
+        r = "color: #fff; background: #bb2020; border: 2px solid #ff4444; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 3px 4px;"
+        o = "color: #fff; background: #994400; border: 2px solid #ff8800; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 3px 4px;"
+        y = "color: #111; background: #bb9900; border: 2px solid #ffcc00; border-radius: 4px; font-size: 11px; font-weight: 700; padding: 3px 4px;"
+        self.range_5m.setStyleSheet(i)
+        self.range_10m.setStyleSheet(i)
+        self.range_15m.setStyleSheet(i)
+        if d <= 5:   self.range_5m.setStyleSheet(r)
+        elif d <= 10: self.range_10m.setStyleSheet(o)
+        elif d <= 15: self.range_15m.setStyleSheet(y)
+
     @Slot()
     def clear_target_distance(self):
-        """Hedef mesafesini temizle"""
-        self.distance_label.setText("Mesafe: - m")
-        self.distance_label.setStyleSheet("""
-            QLabel {
-                color: #00ff00;
-                font-size: 18px;
-                font-weight: bold;
-                padding: 8px;
-                background-color: #1a1a2e;
-                border: 1px solid #333;
-                border-radius: 4px;
-            }
-        """)
+        self.distance_label.setText("Mesafe: -")
+        self.distance_label.setStyleSheet(
+            "color: #34d399; font-size: 15px; font-weight: bold; "
+            "background: rgba(0,0,0,0.4); border: 1px solid rgba(52,211,153,0.2); "
+            "border-radius: 6px; padding: 4px;"
+        )
         self.range_status_label.setText("Bekleniyor...")
-        self.range_status_label.setStyleSheet(Styles.SUBTITLE_LABEL)
-        
-        # Bantları sıfırla
-        inactive_style = """
-            QLabel {
-                color: #888;
-                background-color: #2a2a3e;
-                border: 1px solid #444;
-                border-radius: 3px;
-                font-size: 11px;
-                padding: 2px 8px;
-            }
-        """
-        self.range_5m.setStyleSheet(inactive_style)
-        self.range_10m.setStyleSheet(inactive_style)
-        self.range_15m.setStyleSheet(inactive_style)
+        self.range_status_label.setStyleSheet("color: #9aa4b2; font-size: 11px; background: transparent;")
+        i = "color: #666; background: rgba(40,40,60,0.9); border: 1px solid #2a3a50; border-radius: 4px; font-size: 11px; padding: 3px 4px;"
+        self.range_5m.setStyleSheet(i)
+        self.range_10m.setStyleSheet(i)
+        self.range_15m.setStyleSheet(i)
