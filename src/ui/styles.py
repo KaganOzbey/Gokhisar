@@ -1,48 +1,30 @@
 """
-Modern Arayüz Stil Tanımlamaları - Glassmorphism & Gradient Tema
-
-Tasarım Felsefesi:
-- Glassmorphism: Yarı saydam paneller, blur efekti hissi
-- Gradient: Yumuşak renk geçişleri
-- Neon Glow: Parlayan kenarlar ve vurgular
-- Modern Spacing: Geniş padding ve yuvarlak köşeler
+Modern Arayüz Stil Tanımlamaları - DÜZELTİLMİŞ
+Glassmorphism & Gradient Tema - Layout sorunları giderildi
 """
 
 from src.utils.config import UIConfig
 
 
 class Colors:
-    """Modern renk paleti - Koyu tema + Neon vurgular"""
-    
-    # Ana arka plan - Derin uzay mavisi
-    BG_PRIMARY = "#0b1020"
-    BG_SECONDARY = "#111a2e"
+    BG_PRIMARY = "#061824"
+    BG_SECONDARY = "#071e38"
     BG_TERTIARY = "#1a233a"
-    
-    # Glassmorphism panel arka planları
     GLASS_BG = "rgba(26, 35, 58, 0.72)"
-    GLASS_BORDER = "rgba(255, 255, 255, 0.06)"
-    
-    # Neon vurgular
-    NEON_CYAN = "#4f83ff"
+    GLASS_BORDER = "rgba(0, 212, 255, 0.12)"
+    NEON_CYAN = "#00d4ff"
     NEON_GREEN = "#34d399"
-    NEON_BLUE = "#4f83ff"
+    NEON_BLUE = "#00d4ff"
     NEON_PURPLE = "#7c5cff"
     NEON_PINK = "#db2777"
     NEON_RED = "#ff4d4d"
     NEON_ORANGE = "#fb923c"
     NEON_YELLOW = "#fbbf24"
-    
-    # Gradient başlangıç/bitiş
-    GRADIENT_START = "#121a2e"
-    GRADIENT_END = "#070b14"
-    
-    # Metin renkleri
+    GRADIENT_START = "#071e38"
+    GRADIENT_END = "#040e1a"
     TEXT_PRIMARY = "#e6eaf2"
     TEXT_SECONDARY = "#9aa4b2"
     TEXT_MUTED = "#6b7280"
-    
-    # Durum renkleri
     SUCCESS = "#10b981"
     WARNING = "#f59e0b"
     DANGER = "#ef4444"
@@ -50,12 +32,7 @@ class Colors:
 
 
 class Styles:
-    """
-    Modern Qt StyleSheet tanımlamaları
-    Glassmorphism + Neon tema
-    """
-    
-    # Ana pencere - Gradient arka plan
+
     MAIN_WINDOW = f"""
         QMainWindow {{
             background: qlineargradient(
@@ -66,108 +43,100 @@ class Styles:
             );
         }}
         QWidget {{
-            font-family: 'Segoe UI', 'SF Pro Display', 'Ubuntu', sans-serif;
+            font-family: 'Arial', 'Segoe UI', sans-serif;
         }}
     """
-    
-    # Modern Panel - Glassmorphism efekti
+
     PANEL = f"""
         QFrame {{
-            background-color: rgba(22, 30, 48, 0.92);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            border-radius: 18px;
+            background-color: rgba(6, 20, 42, 0.97);
+            border: 1px solid rgba(0, 212, 255, 0.12);
+            border-radius: 14px;
         }}
     """
-    
-    # Video görüntüleme - Neon çerçeve
+
     VIDEO_DISPLAY = f"""
         QLabel {{
             background-color: #000000;
-            border: 1px solid rgba(79, 131, 255, 0.45);
-            border-radius: 14px;
-            padding: 6px;
+            border: 1px solid rgba(0, 212, 255, 0.45);
+            border-radius: 10px;
+            padding: 4px;
         }}
     """
-    
-    # Durum etiketi - Başarı (Yeşil glow)
+
+    # ── STATUS LABELS ─────────────────────────────────────────────────────────
+    # DÜZELTME: font-size küçültüldü (11px), padding azaltıldı (5px 8px),
+    # setFixedHeight(28) ile uyumlu olması için
     STATUS_LABEL_OK = f"""
         QLabel {{
             background-color: rgba(52, 211, 153, 0.08);
             color: {Colors.TEXT_PRIMARY};
-            font-size: 13px;
-            font-weight: 500;
-            padding: 10px 14px;
-            border: 1px solid rgba(52, 211, 153, 0.18);
-            border-radius: 10px;
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 6px;
+            border: 1px solid rgba(52, 211, 153, 0.25);
+            border-radius: 5px;
         }}
     """
-    
-    # Durum etiketi - Tehlike (Kırmızı glow)
+
     STATUS_LABEL_WARNING = f"""
         QLabel {{
             background-color: rgba(255, 77, 77, 0.08);
             color: {Colors.TEXT_PRIMARY};
-            font-size: 13px;
-            font-weight: 500;
-            padding: 10px 14px;
-            border: 1px solid rgba(255, 77, 77, 0.18);
-            border-radius: 10px;
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 6px;
+            border: 1px solid rgba(255, 77, 77, 0.25);
+            border-radius: 5px;
         }}
     """
-    
-    # Durum etiketi - Dikkat (Sarı/Turuncu glow)
+
     STATUS_LABEL_CAUTION = f"""
         QLabel {{
             background-color: rgba(251, 146, 60, 0.08);
             color: {Colors.TEXT_PRIMARY};
-            font-size: 13px;
-            font-weight: 500;
-            padding: 10px 14px;
-            border: 1px solid rgba(251, 146, 60, 0.18);
-            border-radius: 10px;
-            letter-spacing: 0.5px;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 4px 6px;
+            border: 1px solid rgba(251, 146, 60, 0.25);
+            border-radius: 5px;
         }}
     """
-    
-    # Başlık - Gradient text efekti için büyük ve bold
+
+    # ── BAŞLIKLAR ─────────────────────────────────────────────────────────────
     TITLE_LABEL = f"""
         QLabel {{
             color: {Colors.TEXT_PRIMARY};
-            font-size: 22px;
+            font-size: 14px;
             font-weight: 700;
-            letter-spacing: 1px;
         }}
     """
-    
-    # Alt başlık
+
     SUBTITLE_LABEL = f"""
         QLabel {{
             color: {Colors.TEXT_SECONDARY};
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 500;
         }}
     """
-    
-    # Modern Buton - Glassmorphism + hover efekti
+
+    # ── BUTONLAR ─────────────────────────────────────────────────────────────
     BUTTON_NORMAL = f"""
         QPushButton {{
             background-color: rgba(255, 255, 255, 0.04);
             color: {Colors.TEXT_PRIMARY};
             font-size: 13px;
             font-weight: 600;
-            padding: 8px 16px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            letter-spacing: 0.3px;
+            padding: 7px 10px;
+            border: 1px solid rgba(0, 212, 255, 0.10);
+            border-radius: 8px;
         }}
         QPushButton:hover {{
-            background-color: rgba(79, 131, 255, 0.12);
-            border-color: rgba(79, 131, 255, 0.35);
+            background-color: rgba(0, 212, 255, 0.12);
+            border-color: rgba(0, 212, 255, 0.35);
         }}
         QPushButton:pressed {{
-            background-color: rgba(79, 131, 255, 0.18);
+            background-color: rgba(0, 212, 255, 0.18);
         }}
         QPushButton:disabled {{
             background-color: rgba(100, 116, 139, 0.1);
@@ -175,18 +144,16 @@ class Styles:
             border-color: rgba(100, 116, 139, 0.2);
         }}
     """
-    
-    # Tehlike Butonu - ATEŞ için (Kırmızı neon glow)
+
     BUTTON_DANGER = f"""
         QPushButton {{
             background-color: rgba(239, 68, 68, 0.15);
             color: {Colors.NEON_RED};
-            font-size: 14px;
+            font-size: 15px;
             font-weight: 700;
-            padding: 8px 16px;
+            padding: 8px 10px;
             border: 2px solid rgba(239, 68, 68, 0.5);
-            border-radius: 12px;
-            letter-spacing: 1.5px;
+            border-radius: 8px;
         }}
         QPushButton:hover {{
             background-color: rgba(239, 68, 68, 0.3);
@@ -201,17 +168,16 @@ class Styles:
             border-color: rgba(239, 68, 68, 0.15);
         }}
     """
-    
-    # Başarı Butonu - Yeşil neon
+
     BUTTON_SUCCESS = f"""
         QPushButton {{
             background-color: rgba(16, 185, 129, 0.15);
             color: {Colors.NEON_GREEN};
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
-            padding: 8px 16px;
+            padding: 5px 10px;
             border: 1px solid rgba(16, 185, 129, 0.4);
-            border-radius: 10px;
+            border-radius: 8px;
         }}
         QPushButton:hover {{
             background-color: rgba(16, 185, 129, 0.3);
@@ -221,37 +187,36 @@ class Styles:
             background-color: rgba(16, 185, 129, 0.4);
         }}
     """
-    
-    # Mod Seçim Butonu - Toggle tarzı
+
     BUTTON_MODE = f"""
         QPushButton {{
-            background-color: rgba(255, 255, 255, 0.07);
+            background-color: rgba(0, 212, 255, 0.12);
             color: {Colors.TEXT_PRIMARY};
-            font-size: 10px;
-            font-weight: 600;
-            padding: 6px 2px;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 5px 4px;
             border: 1px solid rgba(255, 255, 255, 0.14);
-            border-radius: 6px;
-            min-height: 28px;
+            border-radius: 5px;
+            min-height: 26px;
         }}
         QPushButton:checked {{
-            background-color: rgba(79, 131, 255, 0.18);
-            border-color: rgba(79, 131, 255, 0.45);
+            background-color: rgba(0, 212, 255, 0.22);
+            border-color: rgba(0, 212, 255, 0.55);
             color: {Colors.NEON_BLUE};
         }}
         QPushButton:hover {{
-            background-color: rgba(79, 131, 255, 0.10);
+            background-color: rgba(0, 212, 255, 0.12);
             border-color: rgba(79, 131, 255, 0.30);
         }}
     """
-    
-    # Modern Slider - Neon cyan
+
+    # ── SLIDER ───────────────────────────────────────────────────────────────
     SLIDER = f"""
         QSlider::groove:horizontal {{
             border: none;
-            height: 6px;
+            height: 4px;
             background: rgba(255, 255, 255, 0.1);
-            border-radius: 3px;
+            border-radius: 2px;
         }}
         QSlider::sub-page:horizontal {{
             background: qlineargradient(
@@ -259,148 +224,132 @@ class Styles:
                 stop:0 {Colors.NEON_CYAN},
                 stop:1 {Colors.NEON_BLUE}
             );
-            border-radius: 3px;
+            border-radius: 2px;
         }}
         QSlider::handle:horizontal {{
             background: {Colors.NEON_CYAN};
             border: 2px solid {Colors.BG_PRIMARY};
-            width: 14px;
-            height: 14px;
-            margin: -5px 0;
-            border-radius: 8px;
+            width: 12px;
+            height: 12px;
+            margin: -4px 0;
+            border-radius: 7px;
         }}
         QSlider::handle:horizontal:hover {{
             background: {Colors.TEXT_PRIMARY};
             border-color: {Colors.NEON_CYAN};
         }}
     """
-    
-    # GroupBox - Modern başlık
+
+    # ── GROUP BOX ─────────────────────────────────────────────────────────────
+    # DÜZELTME: margin-top artırıldı (GroupBox title için yer açıldı)
     GROUP_BOX = f"""
         QGroupBox {{
-            color: {Colors.TEXT_PRIMARY};
-            font-size: 13px;
+            color: {Colors.TEXT_SECONDARY};
+            font-size: 10px;
             font-weight: 600;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            margin-top: 10px;
-            padding: 12px 6px 8px 6px;
-            background-color: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(0, 212, 255, 0.10);
+            border-radius: 6px;
+            margin-top: 12px;
+            padding: 4px 3px 4px 3px;
+            background-color: rgba(255, 255, 255, 0.02);
         }}
         QGroupBox::title {{
             subcontrol-origin: margin;
-            left: 12px;
-            padding: 0 6px;
+            left: 8px;
+            top: 0px;
+            padding: 0 3px;
             color: {Colors.NEON_BLUE};
+            font-size: 10px;
+            font-weight: 700;
         }}
     """
-    
-    # Log/Konsol Alanı - Terminal tarzı
+
     LOG_AREA = f"""
         QTextEdit {{
             background-color: rgba(0, 0, 0, 0.6);
             color: {Colors.TEXT_SECONDARY};
             font-family: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
-            font-size: 12px;
-            border: 1px solid rgba(79, 131, 255, 0.18);
-            border-radius: 10px;
-            padding: 12px;
+            font-size: 11px;
+            border: 1px solid rgba(0, 212, 255, 0.18);
+            border-radius: 8px;
+            padding: 8px;
             selection-background-color: rgba(79, 131, 255, 0.25);
         }}
     """
-    
-    # Splitter - İnce ve modern
+
     SPLITTER = f"""
-        QSplitter {{
-            background: transparent;
-        }}
+        QSplitter {{ background: transparent; }}
         QSplitter::handle {{
             background-color: rgba(255, 255, 255, 0.05);
             border-radius: 2px;
         }}
         QSplitter::handle:horizontal {{
-            width: 4px;
-            margin: 0 4px;
+            width: 4px; margin: 0 4px;
         }}
         QSplitter::handle:vertical {{
-            height: 4px;
-            margin: 4px 0;
+            height: 4px; margin: 4px 0;
         }}
         QSplitter::handle:hover {{
-            background-color: rgba(79, 131, 255, 0.35);
+            background-color: rgba(0, 212, 255, 0.35);
         }}
     """
-    
-    # ScrollBar - İnce ve modern
+
     SCROLLBAR = f"""
         QScrollBar:vertical {{
-            background: transparent;
-            width: 8px;
-            margin: 0;
+            background: transparent; width: 6px; margin: 0;
         }}
         QScrollBar::handle:vertical {{
-            background: rgba(255, 255, 255, 0.2);
-            min-height: 30px;
-            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.15);
+            min-height: 20px; border-radius: 3px;
         }}
         QScrollBar::handle:vertical:hover {{
-            background: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.25);
         }}
-        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
-            height: 0;
-        }}
-        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-            background: transparent;
-        }}
+        QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+        QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
     """
-    
-    # StatusBar - Alt bilgi çubuğu
+
     STATUS_BAR = f"""
         QStatusBar {{
             background-color: rgba(17, 24, 39, 0.9);
             color: {Colors.TEXT_SECONDARY};
-            font-size: 12px;
+            font-size: 11px;
             border-top: 1px solid rgba(255, 255, 255, 0.05);
-            padding: 6px 12px;
+            padding: 4px 10px;
         }}
     """
-    
-    # IFF Badge - DOST (Yeşil glow)
+
     IFF_BADGE_FRIENDLY = f"""
         QLabel {{
-            background-color: rgba(16, 185, 129, 0.25);
-            color: #00FF00;
-            font-size: 14px;
+            background-color: rgba(16, 185, 129, 0.2);
+            color: #00DD88;
+            font-size: 11px;
             font-weight: 700;
-            padding: 8px 16px;
-            border: 2px solid #00FF00;
-            border-radius: 8px;
-            letter-spacing: 1.2px;
+            padding: 4px 6px;
+            border: 1px solid rgba(0, 220, 136, 0.5);
+            border-radius: 5px;
         }}
     """
-    
-    # IFF Badge - DÜŞMAN (Kırmızı glow)
+
     IFF_BADGE_HOSTILE = f"""
         QLabel {{
-            background-color: rgba(239, 68, 68, 0.25);
-            color: #FF0000;
-            font-size: 14px;
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #FF4444;
+            font-size: 11px;
             font-weight: 700;
-            padding: 8px 16px;
-            border: 2px solid #FF0000;
-            border-radius: 8px;
-            letter-spacing: 1.2px;
+            padding: 4px 6px;
+            border: 1px solid rgba(255, 68, 68, 0.5);
+            border-radius: 5px;
         }}
     """
-    
-    # Hedef Sınıfı Label (İkon yanında)
+
     TARGET_CLASS_LABEL = f"""
         QLabel {{
             color: {Colors.TEXT_PRIMARY};
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
-            padding: 4px 8px;
+            padding: 3px 6px;
             background-color: rgba(79, 131, 255, 0.1);
-            border-radius: 6px;
+            border-radius: 4px;
         }}
     """
